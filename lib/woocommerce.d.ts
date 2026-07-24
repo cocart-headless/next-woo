@@ -1,7 +1,12 @@
 // WooCommerce REST API Type Definitions
 // Based on WooCommerce REST API v3
+//
+// Product/category/tag/variation/review types live in lib/cocart.ts now -
+// this file only covers Orders/Customers/Coupons/Shipping/Payment, which
+// still go through WooCommerce REST directly (My Account + checkout order
+// creation - see lib/woocommerce.ts).
 
-// Product Image
+// Product Image (used by OrderLineItem below)
 export interface ProductImage {
   id: number;
   date_created: string;
@@ -13,220 +18,11 @@ export interface ProductImage {
   alt: string;
 }
 
-// Product Category
-export interface ProductCategory {
-  id: number;
-  name: string;
-  slug: string;
-  parent: number;
-  description: string;
-  display: "default" | "products" | "subcategories" | "both";
-  image: ProductImage | null;
-  menu_order: number;
-  count: number;
-}
-
-// Product Tag
-export interface ProductTag {
-  id: number;
-  name: string;
-  slug: string;
-  description: string;
-  count: number;
-}
-
-// Product Attribute
-export interface ProductAttribute {
-  id: number;
-  name: string;
-  slug: string;
-  position: number;
-  visible: boolean;
-  variation: boolean;
-  options: string[];
-}
-
-// Product Default Attribute (for variable products)
-export interface ProductDefaultAttribute {
-  id: number;
-  name: string;
-  option: string;
-}
-
-// Product Dimensions
-export interface ProductDimensions {
-  length: string;
-  width: string;
-  height: string;
-}
-
-// Product Download
-export interface ProductDownload {
-  id: string;
-  name: string;
-  file: string;
-}
-
 // Product Meta Data
 export interface ProductMetaData {
   id: number;
   key: string;
   value: string | number | boolean | object;
-}
-
-// Product
-export interface Product {
-  id: number;
-  name: string;
-  slug: string;
-  permalink: string;
-  date_created: string;
-  date_created_gmt: string;
-  date_modified: string;
-  date_modified_gmt: string;
-  type: "simple" | "grouped" | "external" | "variable";
-  status: "draft" | "pending" | "private" | "publish";
-  featured: boolean;
-  catalog_visibility: "visible" | "catalog" | "search" | "hidden";
-  description: string;
-  short_description: string;
-  sku: string;
-  price: string;
-  regular_price: string;
-  sale_price: string;
-  date_on_sale_from: string | null;
-  date_on_sale_from_gmt: string | null;
-  date_on_sale_to: string | null;
-  date_on_sale_to_gmt: string | null;
-  on_sale: boolean;
-  purchasable: boolean;
-  total_sales: number;
-  virtual: boolean;
-  downloadable: boolean;
-  downloads: ProductDownload[];
-  download_limit: number;
-  download_expiry: number;
-  external_url: string;
-  button_text: string;
-  tax_status: "taxable" | "shipping" | "none";
-  tax_class: string;
-  manage_stock: boolean;
-  stock_quantity: number | null;
-  stock_status: "instock" | "outofstock" | "onbackorder";
-  backorders: "no" | "notify" | "yes";
-  backorders_allowed: boolean;
-  backordered: boolean;
-  low_stock_amount: number | null;
-  sold_individually: boolean;
-  weight: string;
-  dimensions: ProductDimensions;
-  shipping_required: boolean;
-  shipping_taxable: boolean;
-  shipping_class: string;
-  shipping_class_id: number;
-  reviews_allowed: boolean;
-  average_rating: string;
-  rating_count: number;
-  upsell_ids: number[];
-  cross_sell_ids: number[];
-  parent_id: number;
-  purchase_note: string;
-  categories: ProductCategory[];
-  tags: ProductTag[];
-  images: ProductImage[];
-  attributes: ProductAttribute[];
-  default_attributes: ProductDefaultAttribute[];
-  variations: number[];
-  grouped_products: number[];
-  menu_order: number;
-  price_html: string;
-  related_ids: number[];
-  meta_data: ProductMetaData[];
-}
-
-// Product Variation
-export interface ProductVariation {
-  id: number;
-  date_created: string;
-  date_created_gmt: string;
-  date_modified: string;
-  date_modified_gmt: string;
-  description: string;
-  permalink: string;
-  sku: string;
-  price: string;
-  regular_price: string;
-  sale_price: string;
-  date_on_sale_from: string | null;
-  date_on_sale_from_gmt: string | null;
-  date_on_sale_to: string | null;
-  date_on_sale_to_gmt: string | null;
-  on_sale: boolean;
-  status: "draft" | "pending" | "private" | "publish";
-  purchasable: boolean;
-  virtual: boolean;
-  downloadable: boolean;
-  downloads: ProductDownload[];
-  download_limit: number;
-  download_expiry: number;
-  tax_status: "taxable" | "shipping" | "none";
-  tax_class: string;
-  manage_stock: boolean | "parent";
-  stock_quantity: number | null;
-  stock_status: "instock" | "outofstock" | "onbackorder";
-  backorders: "no" | "notify" | "yes";
-  backorders_allowed: boolean;
-  backordered: boolean;
-  low_stock_amount: number | null;
-  weight: string;
-  dimensions: ProductDimensions;
-  shipping_class: string;
-  shipping_class_id: number;
-  image: ProductImage | null;
-  attributes: ProductDefaultAttribute[];
-  menu_order: number;
-  meta_data: ProductMetaData[];
-}
-
-// Product Review
-export interface ProductReview {
-  id: number;
-  date_created: string;
-  date_created_gmt: string;
-  product_id: number;
-  product_name: string;
-  product_permalink: string;
-  status: "approved" | "hold" | "spam" | "unspam" | "trash" | "untrash";
-  reviewer: string;
-  reviewer_email: string;
-  review: string;
-  rating: number;
-  verified: boolean;
-  reviewer_avatar_urls: Record<string, string>;
-}
-
-// Cart Types (Client-side)
-export interface CartItem {
-  productId: number;
-  variationId?: number;
-  quantity: number;
-  name: string;
-  price: string;
-  image?: string;
-  attributes?: ProductDefaultAttribute[];
-}
-
-export interface CartTotals {
-  subtotal: string;
-  shipping: string;
-  tax: string;
-  total: string;
-  itemCount: number;
-}
-
-export interface Cart {
-  items: CartItem[];
-  totals: CartTotals;
 }
 
 // Order Types

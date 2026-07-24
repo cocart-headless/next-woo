@@ -3,7 +3,7 @@ import "./globals.css";
 import { Inter as FontSans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Analytics } from "@vercel/analytics/react";
-import { CartProvider } from "@/components/shop";
+import { CartProvider, AuthProvider } from "@/components/shop";
 import { Nav } from "@/components/layout/nav";
 import { Footer } from "@/components/layout/footer";
 
@@ -45,9 +45,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <CartProvider>
-            <Nav />
-            {children}
-            <Footer />
+            <AuthProvider>
+              <Nav />
+              {children}
+              <Footer />
+            </AuthProvider>
           </CartProvider>
         </ThemeProvider>
         <Analytics />

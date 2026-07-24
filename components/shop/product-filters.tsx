@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useTransition } from "react";
 
-import type { ProductCategory, ProductTag } from "@/lib/woocommerce.d";
+import type { ProductCategory, ProductTag } from "@/lib/cocart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

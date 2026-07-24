@@ -8,7 +8,9 @@ import {
   getProductReviews,
   getRelatedProducts,
   getAllProductSlugs,
-} from "@/lib/woocommerce";
+  getProductImageUrl,
+  currencyFromPrices,
+} from "@/lib/cocart";
 
 import { Section, Container, Prose } from "@/components/craft";
 import {
@@ -44,13 +46,15 @@ export async function generateMetadata({
     };
   }
 
+  const ogImage = getProductImageUrl(product.images[0]);
+
   return {
     title: product.name,
     description: product.short_description.replace(/<[^>]*>/g, "").slice(0, 160),
     openGraph: {
       title: product.name,
       description: product.short_description.replace(/<[^>]*>/g, ""),
-      images: product.images[0]?.src ? [product.images[0].src] : [],
+      images: ogImage ? [ogImage] : [],
     },
   };
 }
@@ -83,7 +87,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             {product.categories[0] && (
               <>
                 <Link
-                  href={`/shop?category=${product.categories[0].slug}`}
+                  href={`/product-category/${product.categories[0].slug}`}
                   className="hover:text-foreground"
                 >
                   {product.categories[0].name}
@@ -107,7 +111,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   {product.categories.map((cat) => (
                     <Link
                       key={cat.id}
-                      href={`/shop?category=${cat.slug}`}
+                      href={`/product-category/${cat.slug}`}
                     >
                       <Badge variant="secondary">{cat.name}</Badge>
                     </Link>
@@ -143,24 +147,27 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
               {/* Price */}
               <PriceDisplay
-                price={product.price}
-                regularPrice={product.regular_price}
-                salePrice={product.sale_price}
-                onSale={product.on_sale}
+                price={product.prices.price}
+                regularPrice={product.prices.regular_price}
+                salePrice={product.prices.sale_price}
+                onSale={product.prices.on_sale}
+                currency={currencyFromPrices(product.prices)}
                 size="lg"
               />
 
               {/* Stock */}
               <StockBadge product={product} showQuantity />
 
-              {/* Short Description */}
-              {product.short_description && (
-                <Prose>
-                  <div className="text-muted-foreground">
-                    {product.short_description.replace(/<[^>]*>/g, "")}
-                  </div>
-                </Prose>
-              )}
+              {/* Short Description (variable products show their own,
+                  variation-aware version inside ProductDetailClient below) */}
+              {!(product.type === "variable" && variations.length > 0) &&
+                product.short_description && (
+                  <Prose>
+                    <div className="text-muted-foreground">
+                      {product.short_description.replace(/<[^>]*>/g, "")}
+                    </div>
+                  </Prose>
+                )}
 
               <Separator />
 

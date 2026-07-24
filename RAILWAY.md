@@ -1,10 +1,10 @@
 # Deploy and Host next-woo on Railway
 
-next-woo is a headless WooCommerce storefront built with Next.js 16, React 19, and TypeScript. It features product browsing, cart, checkout (via WooCommerce), and blog support. Includes a pre-configured WordPress container with WooCommerce and cache revalidation plugin.
+next-woo is a headless WooCommerce storefront built with Next.js 16, React 19, and TypeScript. It features product browsing, a [CoCart](https://cocartapi.com)-powered cart, checkout (via WooCommerce), and blog support. Includes a pre-configured WordPress container with WooCommerce, CoCart, and a cache revalidation plugin.
 
 ## About Hosting next-woo
 
-This template deploys a complete headless WooCommerce stack: a MySQL database, WordPress with WooCommerce, and Next.js frontend. WordPress and WooCommerce handle products, orders, and payments while Next.js delivers a fast, modern storefront. The included revalidation plugin automatically invalidates the Next.js cache when products or content change, ensuring your store always shows fresh data. Environment variables are pre-configured to connect all three services securely.
+This template deploys a complete headless WooCommerce stack: a MySQL database, WordPress with WooCommerce and CoCart, and a Next.js frontend. WordPress and WooCommerce handle products, orders, and payments, CoCart exposes the cart/session REST API the frontend talks to, and Next.js delivers a fast, modern storefront. The included revalidation plugin automatically invalidates the Next.js cache when products or content change, ensuring your store always shows fresh data. Environment variables are pre-configured to connect all services securely.
 
 ## Common Use Cases
 

@@ -9,3 +9,5 @@ export { VariationSelector } from "./variation-selector";
 export { AddToCartButton } from "./add-to-cart-button";
 export { CartProvider, useCart } from "./cart-provider";
 export { CartDrawer } from "./cart-drawer";
+export { AuthProvider, useAuth } from "./auth-provider";
+export type { Customer } from "./auth-provider";

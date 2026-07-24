@@ -2,6 +2,7 @@
 export const mainMenu = {
   home: "/",
   shop: "/shop",
+  account: "/account",
   blog: "/posts",
   about: "https://github.com/9d8dev/next-wp",
 };

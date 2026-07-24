@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Loader2 } from "lucide-react";
@@ -12,7 +12,11 @@ import { Button } from "@/components/ui/button";
 function SuccessContent() {
   const searchParams = useSearchParams();
   const { clearCart } = useCart();
-  const [orderId, setOrderId] = useState<string | null>(null);
+
+  // Handle both URL formats:
+  // Our format: ?order=123
+  // WooCommerce format: ?order-received=123&key=wc_order_xxx
+  const orderId = searchParams.get("order") || searchParams.get("order-received");
 
   useEffect(() => {
     // Clear cart on success page load (payment completed)
@@ -22,15 +26,7 @@ function SuccessContent() {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("pending_order_id");
     }
-
-    // Handle both URL formats:
-    // Our format: ?order=123
-    // WooCommerce format: ?order-received=123&key=wc_order_xxx
-    const ourOrderId = searchParams.get("order");
-    const wcOrderId = searchParams.get("order-received");
-
-    setOrderId(ourOrderId || wcOrderId);
-  }, [clearCart, searchParams]);
+  }, [clearCart]);
 
   return (
     <div className="flex flex-col items-center justify-center py-12 space-y-6 text-center">

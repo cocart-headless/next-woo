@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 
-import type { Product, ProductVariation, ProductDefaultAttribute } from "@/lib/woocommerce.d";
+import type { Product, ProductVariation } from "@/lib/cocart";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 
 interface VariationSelectorProps {
   product: Product;
   variations: ProductVariation[];
-  onVariationChange: (variation: ProductVariation | null) => void;
+  onVariationChange: (
+    variation: ProductVariation | null,
+    selectedOptions: Record<string, string>
+  ) => void;
 }
 
 export function VariationSelector({
@@ -17,109 +20,128 @@ export function VariationSelector({
   variations,
   onVariationChange,
 }: VariationSelectorProps) {
-  const [selectedAttributes, setSelectedAttributes] = useState<
-    Record<string, string>
-  >(() => {
-    // Initialize with default attributes
-    const defaults: Record<string, string> = {};
-    product.default_attributes.forEach((attr) => {
-      defaults[attr.name.toLowerCase()] = attr.option;
-    });
-    return defaults;
-  });
+  // selectedOptions maps attribute key (e.g. "attribute_pa_color") -> chosen
+  // option slug (e.g. "red"). Pre-populate from the product's defaults -
+  // default_attributes' key format isn't fully verified against a live
+  // store, so match defensively against the real attribute keys rather than
+  // assuming an exact prefix match.
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(
+    () => {
+      const attributeKeys = Object.keys(product.attributes);
+      const bare = (key: string) => key.replace(/^attribute_(pa_)?/, "");
+      const initial: Record<string, string> = {};
 
-  // Find matching variation when attributes change
+      for (const [defaultKey, slug] of Object.entries(product.default_attributes)) {
+        const matchedKey = attributeKeys.find(
+          (key) => key === defaultKey || bare(key) === bare(defaultKey)
+        );
+        if (matchedKey) initial[matchedKey] = slug;
+      }
+
+      return initial;
+    }
+  );
+
+  // Find matching variation when selections change
   useEffect(() => {
     const matchingVariation = variations.find((variation) => {
-      return variation.attributes.every((attr) => {
-        const selectedValue = selectedAttributes[attr.name.toLowerCase()];
-        // Empty option means "any" in WooCommerce
-        return !attr.option || selectedValue === attr.option;
+      return Object.entries(variation.attributes).every(([key, attr]) => {
+        const optionSlugs = Object.keys(attr.option);
+        // An empty option map means "any" - this variation doesn't care
+        // about this attribute.
+        if (optionSlugs.length === 0) return true;
+        return selectedOptions[key] === optionSlugs[0];
       });
     });
 
-    onVariationChange(matchingVariation || null);
-  }, [selectedAttributes, variations, onVariationChange]);
+    onVariationChange(matchingVariation || null, selectedOptions);
+  }, [selectedOptions, variations, onVariationChange]);
 
-  const handleAttributeChange = (attributeName: string, value: string) => {
-    setSelectedAttributes((prev) => ({
-      ...prev,
-      [attributeName.toLowerCase()]: value,
-    }));
+  const handleSelect = (attributeKey: string, optionSlug: string) => {
+    setSelectedOptions((prev) => ({ ...prev, [attributeKey]: optionSlug }));
   };
 
-  // Get available options for an attribute considering other selections
-  const getAvailableOptions = (attributeName: string): string[] => {
-    const attrLower = attributeName.toLowerCase();
-    const otherSelections = { ...selectedAttributes };
-    delete otherSelections[attrLower];
+  // Get available option slugs for an attribute, considering other selections
+  const getAvailableOptions = (attributeKey: string): string[] => {
+    const otherSelections = { ...selectedOptions };
+    delete otherSelections[attributeKey];
 
-    // Find variations that match current other selections
     const matchingVariations = variations.filter((variation) => {
-      return Object.entries(otherSelections).every(([name, value]) => {
-        const varAttr = variation.attributes.find(
-          (a) => a.name.toLowerCase() === name
-        );
-        return !varAttr?.option || varAttr.option === value;
+      return Object.entries(otherSelections).every(([key, slug]) => {
+        const attr = variation.attributes[key];
+        if (!attr) return true;
+        const optionSlugs = Object.keys(attr.option);
+        return optionSlugs.length === 0 || optionSlugs[0] === slug;
       });
     });
 
-    // Get unique options for this attribute from matching variations
-    const options = new Set<string>();
+    const available = new Set<string>();
+    const allOptionSlugs = Object.keys(product.attributes[attributeKey]?.options ?? {});
+
     matchingVariations.forEach((variation) => {
-      const attr = variation.attributes.find(
-        (a) => a.name.toLowerCase() === attrLower
-      );
-      if (attr?.option) {
-        options.add(attr.option);
+      const attr = variation.attributes[attributeKey];
+      // A variation can mark "any value" for this attribute either by
+      // omitting the key entirely (verified live - some real WooCommerce
+      // variations never declare an attribute the product still lists as
+      // used_for_variation) or by declaring it with an empty option map.
+      // Both mean the same thing: every real option the product defines is
+      // valid here, not none (the previous behavior disabled every button
+      // whenever no variation pinned a specific value for this attribute).
+      const optionSlugs = attr ? Object.keys(attr.option) : [];
+      if (optionSlugs.length === 0) {
+        allOptionSlugs.forEach((slug) => available.add(slug));
+      } else {
+        optionSlugs.forEach((slug) => available.add(slug));
       }
     });
 
-    return Array.from(options);
+    return Array.from(available);
   };
 
-  if (product.type !== "variable" || product.attributes.length === 0) {
+  const attributeEntries = Object.entries(product.attributes).filter(
+    ([, attr]) => attr.used_for_variation
+  );
+
+  if (product.type !== "variable" || attributeEntries.length === 0) {
     return null;
   }
 
   return (
     <div className="space-y-4">
-      {product.attributes
-        .filter((attr) => attr.variation)
-        .map((attribute) => {
-          const availableOptions = getAvailableOptions(attribute.name);
-          const selectedValue = selectedAttributes[attribute.name.toLowerCase()];
+      {attributeEntries.map(([attributeKey, attribute]) => {
+        const availableOptions = getAvailableOptions(attributeKey);
+        const selectedSlug = selectedOptions[attributeKey];
 
-          return (
-            <div key={attribute.id} className="space-y-2">
-              <Label>{attribute.name}</Label>
-              <div className="flex flex-wrap gap-2">
-                {attribute.options.map((option) => {
-                  const isAvailable = availableOptions.includes(option);
-                  const isSelected = selectedValue === option;
+        return (
+          <div key={attributeKey} className="space-y-2">
+            <Label>{attribute.name}</Label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(attribute.options).map(([slug, label]) => {
+                const isAvailable = availableOptions.includes(slug);
+                const isSelected = selectedSlug === slug;
 
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={!isAvailable}
-                      onClick={() => handleAttributeChange(attribute.name, option)}
-                      className={cn(
-                        "px-4 py-2 text-sm border rounded-md transition-all",
-                        isSelected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input bg-background hover:bg-accent",
-                        !isAvailable && "opacity-50 cursor-not-allowed line-through"
-                      )}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
-              </div>
+                return (
+                  <button
+                    key={slug}
+                    type="button"
+                    disabled={!isAvailable}
+                    onClick={() => handleSelect(attributeKey, slug)}
+                    className={cn(
+                      "px-4 py-2 text-sm border rounded-md transition-all",
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input bg-background hover:bg-accent",
+                      !isAvailable && "opacity-50 cursor-not-allowed line-through"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        );
+      })}
     </div>
   );
 }

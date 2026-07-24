@@ -4,8 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ShoppingCart, X, Plus, Minus, Trash2 } from "lucide-react";
 
-import { useCart } from "./cart-provider";
-import { formatPrice } from "@/lib/woocommerce";
+import { useCart, getItemRegularPrice } from "./cart-provider";
+import { formatPrice, cartItemUnitPrice } from "@/lib/cocart";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -26,7 +26,9 @@ export function CartDrawer() {
     openCart,
     closeCart,
     removeItem,
-    updateQuantity,
+    incrementQuantity,
+    decrementQuantity,
+    getDisplayQuantity,
     getItemCount,
   } = useCart();
 
@@ -73,15 +75,12 @@ export function CartDrawer() {
             <ScrollArea className="flex-1 -mx-6 px-6">
               <div className="space-y-4 py-4">
                 {cart.items.map((item) => (
-                  <div
-                    key={`${item.productId}-${item.variationId || ""}`}
-                    className="flex gap-4"
-                  >
+                  <div key={item.item_key} className="flex gap-4">
                     {/* Image */}
                     <div className="relative h-20 w-20 flex-shrink-0 rounded-md overflow-hidden bg-muted">
-                      {item.image ? (
+                      {item.featured_image ? (
                         <Image
-                          src={item.image}
+                          src={item.featured_image}
                           alt={item.name}
                           fill
                           className="object-cover"
@@ -100,15 +99,27 @@ export function CartDrawer() {
                         {item.name}
                       </h4>
 
-                      {item.attributes && item.attributes.length > 0 && (
+                      {item.meta.variation && Object.keys(item.meta.variation).length > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {item.attributes.map((a) => a.option).join(", ")}
+                          {Object.entries(item.meta.variation)
+                            .map(([label, value]) => `${label}: ${value}`)
+                            .join(", ")}
                         </p>
                       )}
 
-                      <p className="font-medium mt-1">
-                        {formatPrice(item.price)}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="font-medium">
+                          {formatPrice(
+                            cartItemUnitPrice(item.totals.subtotal, item.quantity.value),
+                            cart.currency
+                          )}
+                        </span>
+                        {getItemRegularPrice(item, cart.productPrices) && (
+                          <span className="text-sm text-muted-foreground line-through">
+                            {formatPrice(getItemRegularPrice(item, cart.productPrices)!, cart.currency)}
+                          </span>
+                        )}
+                      </div>
 
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-2 mt-2">
@@ -117,30 +128,19 @@ export function CartDrawer() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={() =>
-                              updateQuantity(
-                                item.productId,
-                                item.quantity - 1,
-                                item.variationId
-                              )
-                            }
+                            onClick={() => decrementQuantity(item.item_key)}
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
                           <span className="w-8 text-center text-sm">
-                            {item.quantity}
+                            {getDisplayQuantity(item)}
                           </span>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={() =>
-                              updateQuantity(
-                                item.productId,
-                                item.quantity + 1,
-                                item.variationId
-                              )
-                            }
+                            disabled={getDisplayQuantity(item) >= item.quantity.maximum}
+                            onClick={() => incrementQuantity(item.item_key)}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -150,9 +150,7 @@ export function CartDrawer() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive"
-                          onClick={() =>
-                            removeItem(item.productId, item.variationId)
-                          }
+                          onClick={() => removeItem(item.item_key)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -162,9 +160,7 @@ export function CartDrawer() {
                     {/* Line Total */}
                     <div className="text-right">
                       <p className="font-medium">
-                        {formatPrice(
-                          (parseFloat(item.price) * item.quantity).toString()
-                        )}
+                        {formatPrice(item.totals.total, cart.currency)}
                       </p>
                     </div>
                   </div>
@@ -177,24 +173,24 @@ export function CartDrawer() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatPrice(cart.totals.subtotal)}</span>
+                  <span>{formatPrice(cart.totals.subtotal, cart.currency)}</span>
                 </div>
-                {parseFloat(cart.totals.shipping) > 0 && (
+                {Number(cart.totals.shipping_total) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Shipping</span>
-                    <span>{formatPrice(cart.totals.shipping)}</span>
+                    <span>{formatPrice(cart.totals.shipping_total, cart.currency)}</span>
                   </div>
                 )}
-                {parseFloat(cart.totals.tax) > 0 && (
+                {Number(cart.totals.total_tax) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tax</span>
-                    <span>{formatPrice(cart.totals.tax)}</span>
+                    <span>{formatPrice(cart.totals.total_tax, cart.currency)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between font-medium">
                   <span>Total</span>
-                  <span>{formatPrice(cart.totals.total)}</span>
+                  <span>{formatPrice(cart.totals.total, cart.currency)}</span>
                 </div>
               </div>
 

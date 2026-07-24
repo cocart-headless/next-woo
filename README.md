@@ -1,6 +1,6 @@
 # Next Woo
 
-A headless WooCommerce storefront built with Next.js 16, React 19, and TypeScript.
+A headless WooCommerce storefront built with Next.js 16, React 19, TypeScript, and the [CoCart](https://cocartapi.com) REST API.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2F9d8dev%2Fnext-woo&env=WORDPRESS_URL,WORDPRESS_HOSTNAME,WORDPRESS_WEBHOOK_SECRET,NEXT_PUBLIC_WORDPRESS_URL,WC_CONSUMER_KEY,WC_CONSUMER_SECRET&envDescription=WordPress%20URL%2C%20hostname%20for%20images%2C%20webhook%20secret%2C%20and%20WooCommerce%20API%20credentials&project-name=next-woo&repository-name=next-woo&demo-title=Next.js%20WooCommerce%20Starter&demo-url=https%3A%2F%2Fnext-woo.com)
 
@@ -20,6 +20,7 @@ A headless WooCommerce storefront built with Next.js 16, React 19, and TypeScrip
 ## Features
 
 - **Full WooCommerce Integration** - Products, categories, variations, cart, and checkout
+- **CoCart-Powered Cart & Auth** - Session persistence and cart operations via the [CoCart](https://cocartapi.com) SDK
 - **Type-safe API Layer** - Comprehensive TypeScript definitions for WooCommerce
 - **Client-side Cart** - Persistent shopping cart with localStorage
 - **WooCommerce Checkout** - Redirects to WooCommerce for secure payment processing
@@ -56,6 +57,7 @@ Instead of building custom Stripe integration and authentication:
 
 - **WordPress 6.0+** with HTTPS enabled
 - **WooCommerce 8.0+** installed and activated
+- **[CoCart](https://cocartapi.com) plugin** installed and activated (powers the cart/session REST endpoints used by `lib/cocart.ts`)
 - **Node.js 18+** and pnpm
 
 ### Step 1: WordPress Setup
@@ -234,6 +236,8 @@ next-woo/
 ├── lib/
 │   ├── woocommerce.ts       # WooCommerce API functions
 │   ├── woocommerce.d.ts     # WooCommerce type definitions
+│   ├── cocart.ts            # CoCart SDK-backed product/category/cart functions
+│   ├── cocart-client.ts     # Shared CoCart SDK client singleton
 │   ├── wordpress.ts         # WordPress API functions
 │   └── wordpress.d.ts       # WordPress type definitions
 ├── site.config.ts           # Site metadata
@@ -359,6 +363,7 @@ pnpm lint      # Run ESLint
 - [Tailwind CSS v4](https://tailwindcss.com/) - Styling
 - [shadcn/ui](https://ui.shadcn.com/) - UI components
 - [WooCommerce](https://woocommerce.com/) - E-commerce backend
+- [CoCart](https://cocartapi.com/) - Headless cart & REST API for WooCommerce
 
 ## License
 
@@ -367,3 +372,5 @@ MIT License
 ## Credits
 
 Built on [next-wp](https://github.com/9d8dev/next-wp) by [9d8](https://9d8.dev).
+
+Headless cart functionality powered by [CoCart](https://cocartapi.com/).

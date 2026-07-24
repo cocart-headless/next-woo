@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { ShoppingCart, Plus, Minus, Loader2 } from "lucide-react";
 
-import type { Product, ProductVariation } from "@/lib/woocommerce.d";
-import { isProductInStock } from "@/lib/woocommerce";
+import type { Product, ProductVariation } from "@/lib/cocart";
+import { isProductInStock, variationCartAttributes } from "@/lib/cocart";
 import { useCart } from "@/components/shop/cart-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 interface AddToCartButtonProps {
   product: Product;
   variation?: ProductVariation | null;
+  selectedOptions?: Record<string, string>;
   className?: string;
   showQuantity?: boolean;
 }
@@ -19,6 +20,7 @@ interface AddToCartButtonProps {
 export function AddToCartButton({
   product,
   variation,
+  selectedOptions,
   className,
   showQuantity = true,
 }: AddToCartButtonProps) {
@@ -26,17 +28,39 @@ export function AddToCartButton({
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
 
-  // For variable products, require a variation
+  // External/affiliate products aren't added to the cart at all - they link
+  // out to wherever the merchant configured (external_url), labeled with
+  // their own button_text (e.g. "Buy on Amazon").
+  if (product.type === "external") {
+    return (
+      <Button asChild className={cn("w-full", className)} size="lg">
+        <a href={product.external_url} target="_blank" rel="noopener noreferrer">
+          {product.button_text || "Buy Product"}
+        </a>
+      </Button>
+    );
+  }
+
+  // For variable products, require both a matched variation AND an explicit
+  // shopper selection for every variation attribute - a variation can match
+  // via "any value" attributes (see variation-selector.tsx) without the
+  // shopper ever having picked one, so !variation alone isn't enough to
+  // gate on.
   const isVariable = product.type === "variable";
-  const needsVariation = isVariable && !variation;
+  const variationAttributeKeys = Object.entries(product.attributes)
+    .filter(([, attr]) => attr.used_for_variation)
+    .map(([key]) => key);
+  const allOptionsSelected = variationAttributeKeys.every((key) =>
+    Boolean(selectedOptions?.[key])
+  );
+  const needsVariation = isVariable && (!variation || !allOptionsSelected);
 
   // Check stock
   const checkableItem = variation || product;
-  const inStock =
-    checkableItem.stock_status === "instock" ||
-    checkableItem.stock_status === "onbackorder";
+  const inStock = isProductInStock(checkableItem) ||
+    checkableItem.stock.stock_status === "onbackorder";
 
-  const maxQuantity = checkableItem.stock_quantity || 99;
+  const maxQuantity = checkableItem.stock.stock_quantity || 99;
 
   const handleAddToCart = async () => {
     if (needsVariation || !inStock) return;
@@ -48,10 +72,9 @@ export function AddToCartButton({
         productId: product.id,
         variationId: variation?.id,
         quantity,
-        name: product.name + (variation ? ` - ${variation.attributes.map((a) => a.option).join(", ")}` : ""),
-        price: variation?.price || product.price,
-        image: (variation?.image || product.images[0])?.src,
-        attributes: variation?.attributes,
+        attributes: variation
+          ? variationCartAttributes(product.attributes, variation.attributes, selectedOptions)
+          : undefined,
       });
 
       // Reset quantity after adding

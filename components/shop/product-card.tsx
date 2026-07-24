@@ -1,9 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import type { Product } from "@/lib/woocommerce.d";
+import type { Product } from "@/lib/cocart";
 import { cn } from "@/lib/utils";
-import { formatPrice, calculateDiscountPercentage, isProductInStock } from "@/lib/woocommerce";
+import {
+  formatPrice,
+  calculateDiscountPercentage,
+  isProductInStock,
+  currencyFromPrices,
+  getProductImageUrl,
+} from "@/lib/cocart";
 import { Badge } from "@/components/ui/badge";
 
 interface ProductCardProps {
@@ -13,25 +19,27 @@ interface ProductCardProps {
 
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   const inStock = isProductInStock(product);
-  const discountPercentage = product.on_sale
-    ? calculateDiscountPercentage(product.regular_price, product.sale_price)
+  const discountPercentage = product.prices.on_sale
+    ? calculateDiscountPercentage(product.prices.regular_price, product.prices.sale_price)
     : 0;
+  const currency = currencyFromPrices(product.prices);
 
   const primaryImage = product.images[0];
+  const primaryImageUrl = getProductImageUrl(primaryImage);
 
   return (
     <Link
-      href={`/shop/${product.slug}`}
+      href={`/product/${product.slug}`}
       className={cn(
         "group flex flex-col border rounded-lg overflow-hidden bg-accent/30",
         "hover:bg-accent/75 transition-all"
       )}
     >
       <div className="relative aspect-square overflow-hidden bg-muted">
-        {primaryImage?.src ? (
+        {primaryImageUrl ? (
           <Image
-            src={primaryImage.src}
-            alt={primaryImage.alt || product.name}
+            src={primaryImageUrl}
+            alt={primaryImage?.alt || product.name}
             fill
             className="object-cover transition-transform group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -45,7 +53,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
 
         {/* Badges */}
         <div className="absolute top-2 left-2 flex flex-col gap-1">
-          {product.on_sale && discountPercentage > 0 && (
+          {product.prices.on_sale && discountPercentage > 0 && (
             <Badge variant="destructive">-{discountPercentage}%</Badge>
           )}
           {product.featured && <Badge variant="secondary">Featured</Badge>}
@@ -68,18 +76,18 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
 
         {/* Price */}
         <div className="flex items-center gap-2 mt-auto">
-          {product.on_sale ? (
+          {product.prices.on_sale ? (
             <>
               <span className="font-semibold text-destructive">
-                {formatPrice(product.sale_price)}
+                {formatPrice(product.prices.sale_price, currency)}
               </span>
               <span className="text-sm text-muted-foreground line-through">
-                {formatPrice(product.regular_price)}
+                {formatPrice(product.prices.regular_price, currency)}
               </span>
             </>
           ) : (
             <span className="font-semibold">
-              {product.price ? formatPrice(product.price) : "Price on request"}
+              {product.prices.price ? formatPrice(product.prices.price, currency) : "Price on request"}
             </span>
           )}
         </div>

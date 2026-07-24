@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
-import { useCart } from "@/components/shop/cart-provider";
-import { formatPrice } from "@/lib/woocommerce";
+import { useCart, getChosenShippingRate } from "@/components/shop/cart-provider";
+import type { CheckoutAddress } from "@/components/shop/cart-provider";
+import { CartNotices } from "@/components/shop/cart-notices";
+import { formatPrice } from "@/lib/cocart";
 import { Section, Container } from "@/components/craft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,9 +33,18 @@ interface CheckoutFormData {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, isLoading, clearCart } = useCart();
+  const { cart, isLoading, clearCart, getCartKey, updateCustomerAddress, selectShippingMethod } =
+    useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+  const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+  // True once the address has been saved to the cart at least once,
+  // regardless of whether shipping rates came back - distinguishes "still
+  // typing" from "saved, but this store can't calculate shipping rates"
+  // (e.g. CoCart Plus isn't installed/active, so cart.shipping never
+  // populates no matter how complete the address is).
+  const [addressSaved, setAddressSaved] = useState(false);
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     email: "",
@@ -57,15 +68,100 @@ export default function CheckoutPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Push the address to CoCart's cart (via the update-customer callback)
+  // whenever the address fields settle, so shipping rates get calculated
+  // before the user reaches payment. Debounced to avoid a request per
+  // keystroke. Both saving the address and calculating/returning shipping
+  // rates work on CoCart Basic alone - only *selecting* a non-default rate
+  // (selectShippingMethod, below) requires CoCart Plus.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const hasEnoughAddress =
+      formData.address1.trim() &&
+      formData.city.trim() &&
+      formData.postcode.trim() &&
+      formData.country.trim();
+
+    if (!hasEnoughAddress || cart.items.length === 0) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      setIsCalculatingShipping(true);
+      setShippingError(null);
+
+      const billing: CheckoutAddress = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        company: formData.company,
+        address_1: formData.address1,
+        address_2: formData.address2,
+        city: formData.city,
+        state: formData.state,
+        postcode: formData.postcode,
+        country: formData.country,
+        email: formData.email,
+        phone: formData.phone,
+      };
+
+      try {
+        await updateCustomerAddress(billing);
+        setAddressSaved(true);
+      } catch (err) {
+        setShippingError(
+          err instanceof Error ? err.message : "Failed to calculate shipping"
+        );
+      } finally {
+        setIsCalculatingShipping(false);
+      }
+    }, 800);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.address1,
+    formData.address2,
+    formData.city,
+    formData.state,
+    formData.postcode,
+    formData.country,
+    formData.company,
+    formData.firstName,
+    formData.lastName,
+    formData.email,
+    formData.phone,
+  ]);
+
+  const handleSelectShippingMethod = async (rateId: string, packageId: string) => {
+    setShippingError(null);
+    try {
+      await selectShippingMethod(rateId, packageId);
+    } catch (err) {
+      // Most likely CoCart Plus isn't installed/active - selecting a
+      // non-default rate requires it, even though rates themselves are
+      // calculated and displayed by CoCart Basic alone.
+      setShippingError(
+        err instanceof Error ? err.message : "Failed to change shipping method"
+      );
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
+      const cartKey = getCartKey();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (cartKey) headers["X-Cart-Key"] = cartKey;
+
       const response = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           billing: {
             first_name: formData.firstName,
@@ -91,11 +187,6 @@ export default function CheckoutPage() {
             postcode: formData.postcode,
             country: formData.country,
           },
-          line_items: cart.items.map((item) => ({
-            product_id: item.productId,
-            variation_id: item.variationId,
-            quantity: item.quantity,
-          })),
           customer_note: formData.notes,
         }),
       });
@@ -162,6 +253,8 @@ export default function CheckoutPage() {
     );
   }
 
+  const shippingRate = getChosenShippingRate(cart.shipping);
+
   return (
     <Section>
       <Container>
@@ -174,6 +267,8 @@ export default function CheckoutPage() {
             </Button>
             <h1 className="text-3xl font-bold">Checkout</h1>
           </div>
+
+          <CartNotices />
 
           {error && (
             <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-lg">
@@ -331,14 +426,11 @@ export default function CheckoutPage() {
 
                   <div className="space-y-3">
                     {cart.items.map((item) => (
-                      <div
-                        key={`${item.productId}-${item.variationId || ""}`}
-                        className="flex gap-3"
-                      >
+                      <div key={item.item_key} className="flex gap-3">
                         <div className="relative h-16 w-16 flex-shrink-0 rounded-md overflow-hidden bg-muted">
-                          {item.image ? (
+                          {item.featured_image ? (
                             <Image
-                              src={item.image}
+                              src={item.featured_image}
                               alt={item.name}
                               fill
                               className="object-cover"
@@ -355,13 +447,11 @@ export default function CheckoutPage() {
                             {item.name}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            Qty: {item.quantity}
+                            Qty: {item.quantity.value}
                           </p>
                         </div>
                         <p className="text-sm font-medium">
-                          {formatPrice(
-                            (parseFloat(item.price) * item.quantity).toString()
-                          )}
+                          {formatPrice(item.totals.total, cart.currency)}
                         </p>
                       </div>
                     ))}
@@ -372,19 +462,65 @@ export default function CheckoutPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span>{formatPrice(cart.totals.subtotal)}</span>
+                      <span>{formatPrice(cart.totals.subtotal, cart.currency)}</span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Shipping</span>
-                      <span>Calculated at next step</span>
+                      <span>
+                        {!cart.needsShipping ? (
+                          "Not required"
+                        ) : isCalculatingShipping ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : shippingRate ? (
+                          shippingRate.cost
+                        ) : addressSaved ? (
+                          "Calculated at the next step"
+                        ) : (
+                          "Enter your address to calculate"
+                        )}
+                      </span>
                     </div>
+
+                    {shippingError && (
+                      <p className="text-xs text-destructive">{shippingError}</p>
+                    )}
+
+                    {cart.needsShipping &&
+                      cart.shipping?.has_calculated_shipping &&
+                      Object.entries(cart.shipping.packages).map(([packageId, pkg]) => {
+                        const rateEntries = Object.entries(pkg.rates);
+                        if (rateEntries.length <= 1) return null;
+
+                        return (
+                          <div key={packageId} className="space-y-1.5 pt-1">
+                            {rateEntries.map(([rateKey, rate]) => (
+                              <label
+                                key={rateKey}
+                                className="flex items-center justify-between text-sm gap-2 cursor-pointer"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <input
+                                    type="radio"
+                                    name={`shipping-${packageId}`}
+                                    checked={pkg.chosen_method === rateKey}
+                                    onChange={() => handleSelectShippingMethod(rateKey, packageId)}
+                                  />
+                                  {rate.label}
+                                </span>
+                                <span className="text-muted-foreground">{rate.cost}</span>
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })}
                   </div>
 
                   <Separator />
 
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
-                    <span>{formatPrice(cart.totals.total)}</span>
+                    <span>{formatPrice(cart.totals.total, cart.currency)}</span>
                   </div>
 
                   <Button

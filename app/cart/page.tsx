@@ -4,10 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { ShoppingCart, Plus, Minus, Trash2, ArrowLeft } from "lucide-react";
 
-import { useCart } from "@/components/shop/cart-provider";
-import { formatPrice } from "@/lib/woocommerce";
+import {
+  useCart,
+  getItemRegularPrice,
+  getChosenShippingRate,
+} from "@/components/shop/cart-provider";
+import { CartNotices } from "@/components/shop/cart-notices";
+import { formatPrice, cartItemUnitPrice } from "@/lib/cocart";
 import { Section, Container } from "@/components/craft";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
 export default function CartPage() {
@@ -16,7 +22,11 @@ export default function CartPage() {
     isLoading,
     removeItem,
     updateQuantity,
+    incrementQuantity,
+    decrementQuantity,
+    getDisplayQuantity,
     clearCart,
+    getItemCount,
   } = useCart();
 
   if (isLoading) {
@@ -57,6 +67,8 @@ export default function CartPage() {
     );
   }
 
+  const shippingRate = getChosenShippingRate(cart.shipping);
+
   return (
     <Section>
       <Container>
@@ -68,19 +80,18 @@ export default function CartPage() {
             </Button>
           </div>
 
+          <CartNotices />
+
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
               {cart.items.map((item) => (
-                <div
-                  key={`${item.productId}-${item.variationId || ""}`}
-                  className="flex gap-4 p-4 border rounded-lg"
-                >
+                <div key={item.item_key} className="flex gap-4 p-4 border rounded-lg">
                   {/* Image */}
                   <div className="relative h-24 w-24 flex-shrink-0 rounded-md overflow-hidden bg-muted">
-                    {item.image ? (
+                    {item.featured_image ? (
                       <Image
-                        src={item.image}
+                        src={item.featured_image}
                         alt={item.name}
                         fill
                         className="object-cover"
@@ -97,15 +108,27 @@ export default function CartPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium">{item.name}</h3>
 
-                    {item.attributes && item.attributes.length > 0 && (
+                    {item.meta.variation && Object.keys(item.meta.variation).length > 0 && (
                       <p className="text-sm text-muted-foreground">
-                        {item.attributes.map((a) => a.option).join(", ")}
+                        {Object.entries(item.meta.variation)
+                          .map(([label, value]) => `${label}: ${value}`)
+                          .join(", ")}
                       </p>
                     )}
 
-                    <p className="font-medium mt-1">
-                      {formatPrice(item.price)}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="font-medium">
+                        {formatPrice(
+                          cartItemUnitPrice(item.totals.subtotal, item.quantity.value),
+                          cart.currency
+                        )}
+                      </span>
+                      {getItemRegularPrice(item, cart.productPrices) && (
+                        <span className="text-sm text-muted-foreground line-through">
+                          {formatPrice(getItemRegularPrice(item, cart.productPrices)!, cart.currency)}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Quantity Controls */}
                     <div className="flex items-center gap-4 mt-3">
@@ -114,28 +137,31 @@ export default function CartPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() =>
-                            updateQuantity(
-                              item.productId,
-                              item.quantity - 1,
-                              item.variationId
-                            )
-                          }
+                          onClick={() => decrementQuantity(item.item_key)}
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-10 text-center">{item.quantity}</span>
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={item.quantity.minimum}
+                          max={item.quantity.maximum}
+                          step={item.quantity.multiple_of}
+                          value={getDisplayQuantity(item)}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (!Number.isNaN(value)) {
+                              updateQuantity(item.item_key, value);
+                            }
+                          }}
+                          className="h-8 w-14 border-0 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() =>
-                            updateQuantity(
-                              item.productId,
-                              item.quantity + 1,
-                              item.variationId
-                            )
-                          }
+                          disabled={getDisplayQuantity(item) >= item.quantity.maximum}
+                          onClick={() => incrementQuantity(item.item_key)}
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
@@ -145,9 +171,7 @@ export default function CartPage() {
                         variant="ghost"
                         size="sm"
                         className="text-destructive"
-                        onClick={() =>
-                          removeItem(item.productId, item.variationId)
-                        }
+                        onClick={() => removeItem(item.item_key)}
                       >
                         <Trash2 className="h-4 w-4 mr-1" />
                         Remove
@@ -158,9 +182,7 @@ export default function CartPage() {
                   {/* Line Total */}
                   <div className="text-right">
                     <p className="font-bold">
-                      {formatPrice(
-                        (parseFloat(item.price) * item.quantity).toString()
-                      )}
+                      {formatPrice(item.totals.total, cart.currency)}
                     </p>
                   </div>
                 </div>
@@ -175,22 +197,25 @@ export default function CartPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      Subtotal ({cart.totals.itemCount} items)
+                      Subtotal ({getItemCount()} items)
                     </span>
-                    <span>{formatPrice(cart.totals.subtotal)}</span>
+                    <span>{formatPrice(cart.totals.subtotal, cart.currency)}</span>
                   </div>
 
-                  {parseFloat(cart.totals.shipping) > 0 && (
+                  {shippingRate && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Shipping</span>
-                      <span>{formatPrice(cart.totals.shipping)}</span>
+                      <span className="text-muted-foreground">
+                        Shipping
+                        <span className="block text-xs">{shippingRate.label}</span>
+                      </span>
+                      <span>{shippingRate.cost}</span>
                     </div>
                   )}
 
-                  {parseFloat(cart.totals.tax) > 0 && (
+                  {Number(cart.totals.total_tax) > 0 && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tax</span>
-                      <span>{formatPrice(cart.totals.tax)}</span>
+                      <span>{formatPrice(cart.totals.total_tax, cart.currency)}</span>
                     </div>
                   )}
                 </div>
@@ -199,7 +224,7 @@ export default function CartPage() {
 
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
-                  <span>{formatPrice(cart.totals.total)}</span>
+                  <span>{formatPrice(cart.totals.total, cart.currency)}</span>
                 </div>
 
                 <Button asChild className="w-full" size="lg">

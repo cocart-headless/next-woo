@@ -1,4 +1,5 @@
-import { formatPrice, calculateDiscountPercentage } from "@/lib/woocommerce";
+import { formatPrice, calculateDiscountPercentage } from "@/lib/cocart";
+import type { CurrencyInfo } from "@cocartheadless/sdk";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +8,7 @@ interface PriceDisplayProps {
   regularPrice: string;
   salePrice: string;
   onSale: boolean;
+  currency?: CurrencyInfo;
   size?: "sm" | "md" | "lg";
   showBadge?: boolean;
 }
@@ -16,6 +18,7 @@ export function PriceDisplay({
   regularPrice,
   salePrice,
   onSale,
+  currency,
   size = "md",
   showBadge = true,
 }: PriceDisplayProps) {
@@ -56,7 +59,7 @@ export function PriceDisplay({
               sizeClasses[size].price
             )}
           >
-            {formatPrice(salePrice)}
+            {formatPrice(salePrice, currency)}
           </span>
           <span
             className={cn(
@@ -64,7 +67,7 @@ export function PriceDisplay({
               sizeClasses[size].original
             )}
           >
-            {formatPrice(regularPrice)}
+            {formatPrice(regularPrice, currency)}
           </span>
           {showBadge && discountPercentage > 0 && (
             <Badge variant="destructive">Save {discountPercentage}%</Badge>
@@ -72,7 +75,7 @@ export function PriceDisplay({
         </>
       ) : (
         <span className={cn("font-bold", sizeClasses[size].price)}>
-          {formatPrice(price || regularPrice)}
+          {formatPrice(price || regularPrice, currency)}
         </span>
       )}
     </div>

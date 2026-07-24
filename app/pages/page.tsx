@@ -14,8 +14,15 @@ export const metadata: Metadata = {
   },
 };
 
+// WooCommerce's own auto-created "Cart"/"Checkout"/"My account" pages are
+// redundant here - this app has first-party /cart, /checkout, and /account
+// routes instead.
+const EXCLUDED_SLUGS = ["cart", "checkout", "my-account"];
+
 export default async function Page() {
-  const pages = await getAllPages();
+  const pages = (await getAllPages()).filter(
+    (page: any) => !EXCLUDED_SLUGS.includes(page.slug)
+  );
 
   return (
     <Section>

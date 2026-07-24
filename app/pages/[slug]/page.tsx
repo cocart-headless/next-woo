@@ -8,12 +8,19 @@ import type { Metadata } from "next";
 // Revalidate pages every hour
 export const revalidate = 3600;
 
+// WooCommerce's own auto-created "Cart"/"Checkout"/"My account" pages are
+// redundant here - this app has first-party /cart, /checkout, and /account
+// routes instead.
+const EXCLUDED_SLUGS = ["cart", "checkout", "my-account"];
+
 export async function generateStaticParams() {
   const pages = await getAllPages();
 
-  return pages.map((page) => ({
-    slug: page.slug,
-  }));
+  return pages
+    .filter((page) => !EXCLUDED_SLUGS.includes(page.slug))
+    .map((page) => ({
+      slug: page.slug,
+    }));
 }
 
 export async function generateMetadata({
@@ -22,6 +29,9 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  if (EXCLUDED_SLUGS.includes(slug)) {
+    return {};
+  }
   const page = await getPageBySlug(slug);
 
   if (!page) {
@@ -43,6 +53,9 @@ export default async function Page({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (EXCLUDED_SLUGS.includes(slug)) {
+    notFound();
+  }
   const page = await getPageBySlug(slug);
 
   if (!page) {

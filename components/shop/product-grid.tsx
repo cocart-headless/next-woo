@@ -1,4 +1,4 @@
-import type { Product } from "@/lib/woocommerce.d";
+import type { Product } from "@/lib/cocart";
 import { ProductCard } from "./product-card";
 
 interface ProductGridProps {

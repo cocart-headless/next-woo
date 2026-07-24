@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 import {
   getProducts,
   getProductCategoryBySlug,
   getAllCategorySlugs,
-} from "@/lib/woocommerce";
+} from "@/lib/cocart";
 
 import { Section, Container, Prose } from "@/components/craft";
 import { ProductGrid } from "@/components/shop";
@@ -64,7 +65,7 @@ export default async function CategoryPage({
   const productsPerPage = 12;
 
   const { data: products, headers } = await getProducts(page, productsPerPage, {
-    category: category.id,
+    category: category.slug,
   });
 
   const { total, totalPages } = headers;
@@ -72,7 +73,7 @@ export default async function CategoryPage({
   const createPaginationUrl = (newPage: number) => {
     const urlParams = new URLSearchParams();
     if (newPage > 1) urlParams.set("page", newPage.toString());
-    return `/shop/category/${slug}${urlParams.toString() ? `?${urlParams.toString()}` : ""}`;
+    return `/product-category/${slug}${urlParams.toString() ? `?${urlParams.toString()}` : ""}`;
   };
 
   return (
@@ -96,12 +97,14 @@ export default async function CategoryPage({
           </Prose>
 
           {/* Category Image */}
-          {category.image && (
-            <div className="w-full h-48 rounded-lg overflow-hidden bg-muted">
-              <img
+          {category.image?.src && (
+            <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted">
+              <Image
                 src={category.image.src}
                 alt={category.name}
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                sizes="100vw"
               />
             </div>
           )}

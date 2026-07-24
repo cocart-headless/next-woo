@@ -5,8 +5,7 @@ import {
   getAllProductCategories,
   getAllProductTags,
   getProductCategoryBySlug,
-  getProductTagBySlug,
-} from "@/lib/woocommerce";
+} from "@/lib/cocart";
 
 import { Section, Container, Prose } from "@/components/craft";
 import { ProductGrid, ProductFilters } from "@/components/shop";
@@ -79,17 +78,15 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       break;
   }
 
-  // Resolve category and tag slugs to IDs
-  const [categoryData, tagData] = await Promise.all([
-    category ? getProductCategoryBySlug(category) : undefined,
-    tag ? getProductTagBySlug(tag) : undefined,
-  ]);
+  // Resolve category slug for the page title (CoCart filters products by
+  // slug directly, unlike WooCommerce's category-ID-based filtering)
+  const categoryData = category ? await getProductCategoryBySlug(category) : undefined;
 
   // Fetch products and filter options
   const [productsResponse, categories, tags] = await Promise.all([
     getProducts(page, productsPerPage, {
-      category: categoryData?.id,
-      tag: tagData?.id,
+      category,
+      tag,
       search,
       orderby,
       order,

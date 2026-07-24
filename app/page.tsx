@@ -98,10 +98,10 @@ export default function Home() {
               </span>
             </Link>
 
-            {/* Account Link - WooCommerce */}
-            <a
+            {/* Account Link */}
+            <Link
               className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
-              href={`${process.env.NEXT_PUBLIC_WORDPRESS_URL}/my-account`}
+              href="/account"
             >
               <User size={32} />
               <span>
@@ -110,7 +110,7 @@ export default function Home() {
                   Login, orders, and settings
                 </span>
               </span>
-            </a>
+            </Link>
             <Link
               className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
               href="/posts/categories"

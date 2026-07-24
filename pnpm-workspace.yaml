@@ -1,0 +1,5 @@
+allowBuilds:
+  sharp: set this to true or false
+  unrs-resolver: set this to true or false
+minimumReleaseAgeExclude:
+  - '@cocartheadless/sdk@1.2.0'

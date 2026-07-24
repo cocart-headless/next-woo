@@ -31,7 +31,7 @@ Headless WordPress starter using Next.js 16 App Router with TypeScript.
 ### Routing
 - Dynamic: `/posts/[slug]`, `/pages/[slug]`
 - Archives: `/posts`, `/posts/authors`, `/posts/categories`, `/posts/tags`
-- Shop: `/shop`, `/shop/[slug]`, `/shop/category/[slug]`
+- Shop: `/shop`, `/product/[slug]`, `/product-category/[slug]`
 - Cart/Checkout: `/cart`, `/checkout`, `/checkout/success`
 - Account: `/account`, `/account/orders`, `/account/orders/[id]`
 - API: `/api/revalidate` (webhook), `/api/og` (OG images), `/api/checkout` (order creation)

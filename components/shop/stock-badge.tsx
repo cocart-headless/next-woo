@@ -1,10 +1,10 @@
-import type { Product } from "@/lib/woocommerce.d";
-import { isProductInStock, getProductStockMessage } from "@/lib/woocommerce";
+import type { Product, ProductVariation } from "@/lib/cocart";
+import { isProductInStock, getProductStockMessage } from "@/lib/cocart";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface StockBadgeProps {
-  product: Product;
+  product: Product | ProductVariation;
   showQuantity?: boolean;
   className?: string;
 }
@@ -18,12 +18,12 @@ export function StockBadge({
   const message = getProductStockMessage(product);
 
   const isLowStock =
-    product.manage_stock &&
-    product.stock_quantity !== null &&
-    product.stock_quantity <= (product.low_stock_amount || 3) &&
-    product.stock_quantity > 0;
+    product.stock.stock_quantity !== null &&
+    typeof product.stock.low_stock_amount === "number" &&
+    product.stock.stock_quantity <= product.stock.low_stock_amount &&
+    product.stock.stock_quantity > 0;
 
-  const isBackorder = product.stock_status === "onbackorder";
+  const isBackorder = product.stock.stock_status === "onbackorder";
 
   return (
     <div className={cn("flex items-center gap-2", className)}>

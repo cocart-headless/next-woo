@@ -1,12 +1,12 @@
 // WooCommerce REST API Functions
 // Uses WooCommerce REST API v3 with consumer key/secret authentication
+//
+// Product/category/tag/variation/review data now comes from the CoCart SDK
+// (see lib/cocart.ts). This file only covers what CoCart doesn't do:
+// My Account (customers/orders) and checkout order creation - CoCart's SDK
+// has no Checkout API yet.
 
 import type {
-  Product,
-  ProductVariation,
-  ProductCategory,
-  ProductTag,
-  ProductReview,
   Order,
   CreateOrderInput,
   Customer,
@@ -54,7 +54,6 @@ export interface WooCommerceResponse<T> {
 }
 
 const USER_AGENT = "Next.js WooCommerce Client";
-const CACHE_TTL = 3600; // 1 hour
 
 // Build authenticated URL for WooCommerce REST API
 function buildWooCommerceUrl(
@@ -98,7 +97,7 @@ async function woocommerceFetch<T>(
       "User-Agent": USER_AGENT,
       "Content-Type": "application/json",
     },
-    next: { tags, revalidate: CACHE_TTL },
+    next: { tags, revalidate: 3600 },
     ...options,
   });
 
@@ -149,7 +148,7 @@ async function woocommerceFetchPaginated<T>(
       "User-Agent": USER_AGENT,
       "Content-Type": "application/json",
     },
-    next: { tags, revalidate: CACHE_TTL },
+    next: { tags, revalidate: 3600 },
   });
 
   if (!response.ok) {
@@ -169,27 +168,6 @@ async function woocommerceFetchPaginated<T>(
       totalPages: parseInt(response.headers.get("X-WP-TotalPages") || "0", 10),
     },
   };
-}
-
-// Graceful paginated fetch
-async function woocommerceFetchPaginatedGraceful<T>(
-  endpoint: string,
-  query?: Record<string, any>,
-  tags: string[] = ["woocommerce"]
-): Promise<WooCommerceResponse<T[]>> {
-  const emptyResponse: WooCommerceResponse<T[]> = {
-    data: [],
-    headers: { total: 0, totalPages: 0 },
-  };
-
-  if (!isConfigured) return emptyResponse;
-
-  try {
-    return await woocommerceFetchPaginated<T[]>(endpoint, query, tags);
-  } catch {
-    console.warn(`WooCommerce paginated fetch failed for ${endpoint}`);
-    return emptyResponse;
-  }
 }
 
 // POST/PUT/DELETE fetch for mutations (no caching)
@@ -225,286 +203,6 @@ async function woocommerceMutate<T>(
   }
 
   return response.json();
-}
-
-// ============================================================================
-// Products
-// ============================================================================
-
-export async function getProducts(
-  page: number = 1,
-  perPage: number = 12,
-  params?: {
-    category?: number;
-    tag?: number;
-    search?: string;
-    orderby?: "date" | "id" | "title" | "slug" | "price" | "popularity" | "rating";
-    order?: "asc" | "desc";
-    featured?: boolean;
-    on_sale?: boolean;
-    min_price?: number;
-    max_price?: number;
-    stock_status?: "instock" | "outofstock" | "onbackorder";
-  }
-): Promise<WooCommerceResponse<Product[]>> {
-  const query: Record<string, any> = {
-    per_page: perPage,
-    page,
-    status: "publish",
-    ...params,
-  };
-
-  const cacheTags = ["woocommerce", "products", `products-page-${page}`];
-
-  if (params?.category) cacheTags.push(`products-category-${params.category}`);
-  if (params?.tag) cacheTags.push(`products-tag-${params.tag}`);
-  if (params?.search) cacheTags.push("products-search");
-
-  return woocommerceFetchPaginatedGraceful<Product>("products", query, cacheTags);
-}
-
-export async function getAllProducts(params?: {
-  category?: number;
-  tag?: number;
-  featured?: boolean;
-  on_sale?: boolean;
-}): Promise<Product[]> {
-  return woocommerceFetchGraceful<Product[]>(
-    "products",
-    [],
-    { per_page: 100, status: "publish", ...params },
-    ["woocommerce", "products"]
-  );
-}
-
-export async function getProductById(id: number): Promise<Product> {
-  return woocommerceFetch<Product>(`products/${id}`, undefined, [
-    "woocommerce",
-    "products",
-    `product-${id}`,
-  ]);
-}
-
-export async function getProductBySlug(slug: string): Promise<Product | undefined> {
-  const products = await woocommerceFetchGraceful<Product[]>(
-    "products",
-    [],
-    { slug, status: "publish" },
-    ["woocommerce", "products"]
-  );
-  return products[0];
-}
-
-export async function getFeaturedProducts(limit: number = 4): Promise<Product[]> {
-  return woocommerceFetchGraceful<Product[]>(
-    "products",
-    [],
-    { featured: true, per_page: limit, status: "publish" },
-    ["woocommerce", "products", "products-featured"]
-  );
-}
-
-export async function getOnSaleProducts(limit: number = 8): Promise<Product[]> {
-  return woocommerceFetchGraceful<Product[]>(
-    "products",
-    [],
-    { on_sale: true, per_page: limit, status: "publish" },
-    ["woocommerce", "products", "products-sale"]
-  );
-}
-
-export async function getRelatedProducts(
-  productId: number,
-  limit: number = 4
-): Promise<Product[]> {
-  const product = await getProductById(productId);
-  if (!product.related_ids || product.related_ids.length === 0) {
-    return [];
-  }
-
-  const relatedIds = product.related_ids.slice(0, limit);
-  return woocommerceFetchGraceful<Product[]>(
-    "products",
-    [],
-    { include: relatedIds.join(","), status: "publish" },
-    ["woocommerce", "products"]
-  );
-}
-
-// For static generation
-export async function getAllProductSlugs(): Promise<{ slug: string }[]> {
-  if (!isConfigured) return [];
-
-  try {
-    const allSlugs: { slug: string }[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await woocommerceFetchPaginated<Product[]>("products", {
-        per_page: 100,
-        page,
-        status: "publish",
-      });
-
-      allSlugs.push(...response.data.map((product) => ({ slug: product.slug })));
-      hasMore = page < response.headers.totalPages;
-      page++;
-    }
-
-    return allSlugs;
-  } catch {
-    console.warn("WooCommerce unavailable, skipping static generation for products");
-    return [];
-  }
-}
-
-// ============================================================================
-// Product Variations
-// ============================================================================
-
-export async function getProductVariations(
-  productId: number
-): Promise<ProductVariation[]> {
-  return woocommerceFetchGraceful<ProductVariation[]>(
-    `products/${productId}/variations`,
-    [],
-    { per_page: 100 },
-    ["woocommerce", "products", `product-${productId}`, "variations"]
-  );
-}
-
-export async function getProductVariation(
-  productId: number,
-  variationId: number
-): Promise<ProductVariation> {
-  return woocommerceFetch<ProductVariation>(
-    `products/${productId}/variations/${variationId}`,
-    undefined,
-    ["woocommerce", "products", `product-${productId}`, `variation-${variationId}`]
-  );
-}
-
-// ============================================================================
-// Product Categories
-// ============================================================================
-
-export async function getProductCategories(
-  page: number = 1,
-  perPage: number = 100
-): Promise<WooCommerceResponse<ProductCategory[]>> {
-  return woocommerceFetchPaginatedGraceful<ProductCategory>(
-    "products/categories",
-    { per_page: perPage, page, hide_empty: true },
-    ["woocommerce", "categories"]
-  );
-}
-
-export async function getAllProductCategories(): Promise<ProductCategory[]> {
-  return woocommerceFetchGraceful<ProductCategory[]>(
-    "products/categories",
-    [],
-    { per_page: 100, hide_empty: true },
-    ["woocommerce", "categories"]
-  );
-}
-
-export async function getProductCategoryById(id: number): Promise<ProductCategory> {
-  return woocommerceFetch<ProductCategory>(
-    `products/categories/${id}`,
-    undefined,
-    ["woocommerce", "categories", `category-${id}`]
-  );
-}
-
-export async function getProductCategoryBySlug(
-  slug: string
-): Promise<ProductCategory | undefined> {
-  const categories = await woocommerceFetchGraceful<ProductCategory[]>(
-    "products/categories",
-    [],
-    { slug },
-    ["woocommerce", "categories"]
-  );
-  return categories[0];
-}
-
-export async function getAllCategorySlugs(): Promise<{ slug: string }[]> {
-  if (!isConfigured) return [];
-
-  try {
-    const categories = await getAllProductCategories();
-    return categories.map((cat) => ({ slug: cat.slug }));
-  } catch {
-    console.warn("WooCommerce unavailable, skipping static generation for categories");
-    return [];
-  }
-}
-
-// ============================================================================
-// Product Tags
-// ============================================================================
-
-export async function getProductTags(
-  page: number = 1,
-  perPage: number = 100
-): Promise<WooCommerceResponse<ProductTag[]>> {
-  return woocommerceFetchPaginatedGraceful<ProductTag>(
-    "products/tags",
-    { per_page: perPage, page, hide_empty: true },
-    ["woocommerce", "tags"]
-  );
-}
-
-export async function getAllProductTags(): Promise<ProductTag[]> {
-  return woocommerceFetchGraceful<ProductTag[]>(
-    "products/tags",
-    [],
-    { per_page: 100, hide_empty: true },
-    ["woocommerce", "tags"]
-  );
-}
-
-export async function getProductTagBySlug(
-  slug: string
-): Promise<ProductTag | undefined> {
-  const tags = await woocommerceFetchGraceful<ProductTag[]>(
-    "products/tags",
-    [],
-    { slug },
-    ["woocommerce", "tags"]
-  );
-  return tags[0];
-}
-
-// ============================================================================
-// Product Reviews
-// ============================================================================
-
-export async function getProductReviews(
-  productId: number
-): Promise<ProductReview[]> {
-  return woocommerceFetchGraceful<ProductReview[]>(
-    "products/reviews",
-    [],
-    { product: productId, status: "approved" },
-    ["woocommerce", "reviews", `product-${productId}`]
-  );
-}
-
-export async function createProductReview(
-  productId: number,
-  review: {
-    review: string;
-    reviewer: string;
-    reviewer_email: string;
-    rating: number;
-  }
-): Promise<ProductReview> {
-  return woocommerceMutate<ProductReview>("products/reviews", "POST", {
-    product_id: productId,
-    ...review,
-  });
 }
 
 // ============================================================================
@@ -694,61 +392,4 @@ export async function getPaymentGateways(): Promise<PaymentGateway[]> {
 export async function getEnabledPaymentGateways(): Promise<PaymentGateway[]> {
   const gateways = await getPaymentGateways();
   return gateways.filter((gateway) => gateway.enabled);
-}
-
-// ============================================================================
-// Utilities
-// ============================================================================
-
-export function formatPrice(
-  price: string | number,
-  currency: string = "USD"
-): string {
-  const numericPrice = typeof price === "string" ? parseFloat(price) : price;
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(numericPrice);
-}
-
-export function calculateDiscountPercentage(
-  regularPrice: string,
-  salePrice: string
-): number {
-  const regular = parseFloat(regularPrice);
-  const sale = parseFloat(salePrice);
-
-  if (!regular || !sale || regular <= sale) return 0;
-
-  return Math.round(((regular - sale) / regular) * 100);
-}
-
-export function isProductInStock(product: Product): boolean {
-  if (!product.manage_stock) {
-    return product.stock_status === "instock";
-  }
-
-  return (
-    product.stock_status === "instock" &&
-    (product.stock_quantity === null || product.stock_quantity > 0)
-  );
-}
-
-export function getProductStockMessage(product: Product): string {
-  if (!isProductInStock(product)) {
-    if (product.stock_status === "onbackorder") {
-      return "Available on backorder";
-    }
-    return "Out of stock";
-  }
-
-  if (product.manage_stock && product.stock_quantity !== null) {
-    if (product.stock_quantity <= (product.low_stock_amount || 3)) {
-      return `Only ${product.stock_quantity} left in stock`;
-    }
-    return "In stock";
-  }
-
-  return "In stock";
 }
