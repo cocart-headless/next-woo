@@ -355,28 +355,3 @@ export interface WooCommerceError {
     status: number;
   };
 }
-
-// Create Order Input
-export interface CreateOrderInput {
-  payment_method?: string;
-  payment_method_title?: string;
-  set_paid?: boolean;
-  billing?: Partial<OrderBilling>;
-  shipping?: Partial<OrderShipping>;
-  line_items: Array<{
-    product_id: number;
-    variation_id?: number;
-    quantity: number;
-  }>;
-  shipping_lines?: Array<{
-    method_id: string;
-    method_title: string;
-    total: string;
-  }>;
-  coupon_lines?: Array<{
-    code: string;
-  }>;
-  customer_id?: number;
-  customer_note?: string;
-  meta_data?: ProductMetaData[];
-}

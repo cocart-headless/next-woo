@@ -194,22 +194,32 @@ Your site is now running at `http://localhost:3000`.
          │                           │
          ▼                           ▼
    ┌──────────┐               ┌──────────┐
-   │  Browse  │               │  Payment │
-   │   Cart   │ ──redirect──► │  Account │
-   │ Checkout │               │  Orders  │
+   │  Browse  │               │  Account │
+   │   Cart   │ ────API─────► │  Orders  │
+   │ Checkout │               │          │
    └──────────┘               └──────────┘
     (Next.js)                (WooCommerce)
 ```
 
 ### Checkout Flow
 
-1. Customer adds items to cart (client-side, localStorage)
-2. Customer fills billing form on `/checkout`
-3. Order created in WooCommerce via API (unpaid)
-4. Customer redirected to `order.payment_url` (WooCommerce checkout)
-5. Customer pays via configured gateway (Stripe, PayPal, etc.)
-6. WooCommerce redirects to `/checkout/success`
-7. Cart cleared automatically
+Checkout is native/headless via CoCart Plus's checkout API — payment for
+supported gateways (offline gateways plus any redirect-based gateway) is
+handled without leaving the Next.js app:
+
+1. Customer adds items to cart (CoCart session, cart-key based)
+2. Customer fills the billing form on `/checkout`; address/shipping-rate
+   calculation happens live via `cart-provider.tsx`
+3. Customer selects a payment method (`GET checkout/payment-methods`)
+4. Order is created and paid in one call (`POST checkout` via
+   `lib/cocart-checkout.ts`'s `processCheckout()`)
+5. The response's `payment_result.payment_status` determines what happens
+   next: `success`/`no_payment_required`/`on_hold` redirect to
+   `redirect_url` (this app's own `/checkout/success` if CoCart Starter's
+   `frontend_url` is configured in WP admin, otherwise the WooCommerce
+   domain); a `requires_action` redirect gateway sends the customer to
+   `action_data.redirect`
+6. Cart cleared automatically before redirecting
 
 ## Project Structure
 
@@ -217,7 +227,6 @@ Your site is now running at `http://localhost:3000`.
 next-woo/
 ├── app/
 │   ├── api/
-│   │   ├── checkout/        # Order creation endpoint
 │   │   ├── og/              # OG image generation
 │   │   └── revalidate/      # Cache revalidation webhook
 │   ├── shop/
@@ -234,10 +243,11 @@ next-woo/
 │   ├── ui/                  # shadcn/ui components
 │   └── theme/               # Theme toggle
 ├── lib/
-│   ├── woocommerce.ts       # WooCommerce API functions
+│   ├── woocommerce.ts       # WooCommerce API functions (My Account only)
 │   ├── woocommerce.d.ts     # WooCommerce type definitions
 │   ├── cocart.ts            # CoCart SDK-backed product/category/cart functions
 │   ├── cocart-client.ts     # Shared CoCart SDK client singleton
+│   ├── cocart-checkout.ts   # CoCart Plus native checkout API client
 │   ├── wordpress.ts         # WordPress API functions
 │   └── wordpress.d.ts       # WordPress type definitions
 ├── site.config.ts           # Site metadata
@@ -271,18 +281,23 @@ const categories = await getAllProductCategories();
 const category = await getProductCategoryBySlug("clothing");
 ```
 
-### Orders
+### Checkout
 
 ```typescript
-import { createOrder } from "@/lib/woocommerce";
+import { getPaymentMethods, processCheckout } from "@/lib/cocart-checkout";
 
-const order = await createOrder({
-  billing: { email: "customer@example.com", ... },
-  line_items: [{ product_id: 123, quantity: 2 }],
+const methods = await getPaymentMethods();
+
+const { payment_result } = await processCheckout({
+  billing_address: { email: "customer@example.com", first_name: "...", /* ... */ },
+  shipping_address: { /* ... */ },
+  use_different_billing: true,
+  payment_method: "cod",
 });
 
-// Redirect to payment
-window.location.href = order.payment_url;
+if (payment_result.payment_status === "success") {
+  window.location.href = payment_result.redirect_url;
+}
 ```
 
 ### Cart (Client-side)
@@ -348,9 +363,12 @@ pnpm lint      # Run ESLint
 - Add WordPress domain to `WORDPRESS_HOSTNAME`
 - Check `next.config.ts` has correct `remotePatterns`
 
-### Checkout redirect fails
-- Verify WooCommerce checkout page is configured
-- Check payment gateway return URL points to your Next.js domain
+### Checkout redirect fails / lands on the WooCommerce domain
+- Verify CoCart Plus is active and its `checkout/config` endpoint responds
+- Set CoCart Starter's `frontend_url` setting in WP admin so
+  `payment_result.redirect_url` points back at this Next.js app instead of
+  the WooCommerce domain
+- Check the selected payment gateway is enabled and configured in WooCommerce
 
 ### My Account link not working
 - Ensure `NEXT_PUBLIC_WORDPRESS_URL` is set correctly

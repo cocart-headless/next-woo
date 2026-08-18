@@ -55,12 +55,14 @@ Headless WordPress starter using Next.js 16 App Router with TypeScript.
 - Cart state: items array with `{ productId, variationId?, quantity, name, price, image }`
 
 ### Checkout & Payment Flow
-- User fills billing form on `/checkout`
-- Order created in WooCommerce via `/api/checkout` (unpaid)
-- User redirected to `order.payment_url` (WooCommerce checkout)
-- Payment handled by WooCommerce's configured gateway (Stripe, PayPal, etc.)
-- After payment, WooCommerce redirects to `/checkout/success`
-- Cart cleared on success page load
+- Native headless checkout via CoCart Plus's `cocart/v2/checkout*` REST API (`lib/cocart-checkout.ts`) — no more redirect to WooCommerce's hosted checkout
+- Address/shipping-rate calculation on `/checkout` still uses `cart-provider.tsx`'s `updateCustomerAddress()`/`selectShippingMethod()` (CoCart Plus's `cart/update`/`cart/set-shipping-method`) — kept as-is because `PUT /checkout`'s `shipping_methods` response is a flat map, not the per-package rate list the shipping UI needs
+- Payment methods listed via `getPaymentMethods()` (`GET checkout/payment-methods`), selected in the checkout form
+- Placing the order calls `processCheckout()` (`POST checkout`), which creates and (attempts to) pay the `WC_Order` in one call; branch on `payment_result.payment_status`: `success`/`no_payment_required`/`on_hold` redirect to `redirect_url`, `requires_action` with `action_type: 'gateway_redirect_required'` redirects to `action_data.redirect`, other `action_type`s (e.g. Stripe 3DS) aren't supported yet, `failed` shows `payment_result.message`
+- `redirect_url` only lands back on this Next.js app if CoCart Starter's `frontend_url` setting is configured in WP admin — otherwise it points at the WooCommerce domain
+- `/checkout/success` reads `order`/`order-received` + `key` from the query string and calls `getOrderReceived()` to show real order totals/items
+- Cart cleared before redirecting on a successful/on-hold/no-payment-required order
+- Gateway-specific client-side tokenization (Stripe Elements, etc.) is not yet implemented — see `docs/checkout-workflow.md` and `docs/gateway-compatibility.md` in the CoCart Plus plugin for the full `payment_result` contract
 
 ### Configuration Files
 - `site.config.ts` - Site metadata (domain, name, description)

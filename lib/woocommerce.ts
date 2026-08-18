@@ -2,13 +2,12 @@
 // Uses WooCommerce REST API v3 with consumer key/secret authentication
 //
 // Product/category/tag/variation/review data now comes from the CoCart SDK
-// (see lib/cocart.ts). This file only covers what CoCart doesn't do:
-// My Account (customers/orders) and checkout order creation - CoCart's SDK
-// has no Checkout API yet.
+// (see lib/cocart.ts). Checkout/order placement now goes through CoCart
+// Plus's native checkout API (see lib/cocart-checkout.ts). This file only
+// covers what neither of those do: My Account (customers/orders).
 
 import type {
   Order,
-  CreateOrderInput,
   Customer,
   Coupon,
   ShippingZone,
@@ -208,10 +207,6 @@ async function woocommerceMutate<T>(
 // ============================================================================
 // Orders
 // ============================================================================
-
-export async function createOrder(orderData: CreateOrderInput): Promise<Order> {
-  return woocommerceMutate<Order>("orders", "POST", orderData);
-}
 
 export async function getOrder(orderId: number): Promise<Order> {
   return woocommerceFetch<Order>(`orders/${orderId}`, undefined, [

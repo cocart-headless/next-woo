@@ -1,32 +1,44 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Loader2 } from "lucide-react";
 
 import { useCart } from "@/components/shop/cart-provider";
+import { getOrderReceived, type OrderReceived } from "@/lib/cocart-checkout";
+import { formatPrice } from "@/lib/cocart";
 import { Section, Container } from "@/components/craft";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 function SuccessContent() {
   const searchParams = useSearchParams();
-  const { clearCart } = useCart();
+  const { clearCart, cart } = useCart();
 
   // Handle both URL formats:
   // Our format: ?order=123
   // WooCommerce format: ?order-received=123&key=wc_order_xxx
   const orderId = searchParams.get("order") || searchParams.get("order-received");
+  const orderKey = searchParams.get("key");
+
+  const [order, setOrder] = useState<OrderReceived | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   useEffect(() => {
     // Clear cart on success page load (payment completed)
     clearCart();
-
-    // Clear pending order from session storage
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("pending_order_id");
-    }
   }, [clearCart]);
+
+  useEffect(() => {
+    if (!orderId || !orderKey) return;
+
+    getOrderReceived(orderId, orderKey)
+      .then(setOrder)
+      .catch((err) =>
+        setOrderError(err instanceof Error ? err.message : "Failed to load order")
+      );
+  }, [orderId, orderKey]);
 
   return (
     <div className="flex flex-col items-center justify-center py-12 space-y-6 text-center">
@@ -45,9 +57,33 @@ function SuccessContent() {
       {orderId && (
         <div className="bg-muted px-6 py-4 rounded-lg">
           <p className="text-sm text-muted-foreground">Order Number</p>
-          <p className="text-2xl font-bold">#{orderId}</p>
+          <p className="text-2xl font-bold">#{order?.order_number ?? orderId}</p>
         </div>
       )}
+
+      {order && (
+        <div className="border rounded-lg p-6 space-y-4 text-left w-full max-w-md">
+          <div className="space-y-3">
+            {order.items.map((item) => (
+              <div key={item.item_id} className="flex justify-between gap-3 text-sm">
+                <span className="line-clamp-2">
+                  {item.product_name} × {item.quantity}
+                </span>
+                <span className="font-medium whitespace-nowrap">
+                  {formatPrice(item.total, cart.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Separator />
+          <div className="flex justify-between font-bold">
+            <span>Total</span>
+            <span>{formatPrice(order.total, cart.currency)}</span>
+          </div>
+        </div>
+      )}
+
+      {orderError && <p className="text-sm text-destructive">{orderError}</p>}
 
       <div className="flex gap-4">
         <Button asChild>

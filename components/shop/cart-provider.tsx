@@ -10,7 +10,7 @@ import {
   ReactNode,
 } from "react";
 
-import { AuthenticationError } from "@cocartheadless/sdk";
+import { AuthenticationError, ValidationError } from "@cocartheadless/sdk";
 import type {
   CartItem as SDKCartItem,
   CartTotals,
@@ -367,7 +367,15 @@ export function CartProvider({ children }: CartProviderProps) {
         // authenticated cart_key it now has no permission to access
         // (`cocart_must_authenticate_user`). Clear it and fall back to a
         // fresh guest cart instead of failing outright.
-        if (error instanceof AuthenticationError) {
+        //
+        // A guest cart_key whose server-side WooCommerce session has
+        // expired/been pruned hits the same dead end, just via
+        // `cocart_invalid_cart` instead - the fix is identical.
+        const isStaleCartKey =
+          error instanceof AuthenticationError ||
+          (error instanceof ValidationError &&
+            error.errorCode === "cocart_invalid_cart");
+        if (isStaleCartKey) {
           await client.clearSession();
           response = await client.cart().get();
         } else {
