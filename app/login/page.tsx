@@ -53,6 +53,11 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="text"
+                autoComplete="username"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -64,6 +69,7 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -75,8 +81,9 @@ export default function LoginPage() {
           </form>
 
           <p className="text-sm text-muted-foreground text-center">
-            <Link href="/shop" className="underline">
-              Continue shopping
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="underline">
+              Create one
             </Link>
           </p>
         </div>
