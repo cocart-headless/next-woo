@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 import { getStripe } from "@/lib/stripe-client";
@@ -56,7 +56,13 @@ function CardForm({ onReady }: StripeCardSectionProps) {
 }
 
 export function StripeCardSection({ onReady }: StripeCardSectionProps) {
-  const stripePromise = getStripe();
+  // Lazy-initialized so getStripe() (and the loadStripe() call inside it)
+  // runs at most once per mount instead of on every render. Safe to call
+  // during SSR too - getStripe() only touches process.env, and stripe-js's
+  // own loadScript() no-ops (resolves null) when window/document aren't
+  // available - but this component only ever mounts client-side in
+  // practice, once a Stripe payment method is selected post-hydration.
+  const [stripePromise] = useState(() => getStripe());
 
   if (!stripePromise) {
     return (

@@ -103,6 +103,7 @@ export default function EditAccountPage() {
             <Label htmlFor="first_name">First Name</Label>
             <Input
               id="first_name"
+              autoComplete="given-name"
               required
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
@@ -112,6 +113,7 @@ export default function EditAccountPage() {
             <Label htmlFor="last_name">Last Name</Label>
             <Input
               id="last_name"
+              autoComplete="family-name"
               required
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
@@ -122,6 +124,7 @@ export default function EditAccountPage() {
           <Label htmlFor="display_name">Display Name</Label>
           <Input
             id="display_name"
+            autoComplete="nickname"
             required
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -132,6 +135,11 @@ export default function EditAccountPage() {
           <Input
             id="email"
             type="email"
+            autoComplete="username"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -148,6 +156,7 @@ export default function EditAccountPage() {
           <Input
             id="password_current"
             type="password"
+            autoComplete="current-password"
             value={passwordCurrent}
             onChange={(e) => setPasswordCurrent(e.target.value)}
           />
@@ -158,6 +167,7 @@ export default function EditAccountPage() {
             <Input
               id="password_1"
               type="password"
+              autoComplete="new-password"
               value={password1}
               onChange={(e) => setPassword1(e.target.value)}
             />
@@ -167,6 +177,7 @@ export default function EditAccountPage() {
             <Input
               id="password_2"
               type="password"
+              autoComplete="new-password"
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
             />
