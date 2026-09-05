@@ -21,7 +21,7 @@ import {
   type CheckoutPaymentDataEntry,
   type PaymentResult,
 } from "@/lib/cocart-checkout";
-import { getMyAccount } from "@/lib/cocart-account";
+import { getMyAccount, type AccountAddress } from "@/lib/cocart-account";
 import { Section, Container } from "@/components/craft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,8 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface CheckoutFormData {
-  email: string;
+interface AddressFields {
   firstName: string;
   lastName: string;
   company: string;
@@ -46,8 +45,215 @@ interface CheckoutFormData {
   state: string;
   postcode: string;
   country: string;
+}
+
+interface CheckoutFormData {
+  email: string;
   phone: string;
+  // The primary address collected up front. Doubles as the sole/billing
+  // address when the cart doesn't need shipping.
+  shipping: AddressFields;
+  // Only meaningful when the cart needs shipping - false means billing
+  // mirrors the shipping address (the common case), matching CoCart's own
+  // `use_different_billing` flag.
+  billingIsDifferent: boolean;
+  billing: AddressFields;
   notes: string;
+}
+
+const emptyAddress = (country: string): AddressFields => ({
+  firstName: "",
+  lastName: "",
+  company: "",
+  address1: "",
+  address2: "",
+  city: "",
+  state: "",
+  postcode: "",
+  country,
+});
+
+function addressFromAccount(
+  addr: AccountAddress | undefined,
+  fallback: AddressFields
+): AddressFields {
+  if (!addr) return fallback;
+  return {
+    firstName: addr.first_name || fallback.firstName,
+    lastName: addr.last_name || fallback.lastName,
+    company: addr.company || fallback.company,
+    address1: addr.address_1 || fallback.address1,
+    address2: addr.address_2 || fallback.address2,
+    city: addr.city || fallback.city,
+    state: addr.state || fallback.state,
+    postcode: addr.postcode || fallback.postcode,
+    country: addr.country || fallback.country,
+  };
+}
+
+// Maps this page's camelCase field names onto CoCart's unprefixed
+// first_name/address_1/etc. shape - satisfies both CheckoutAddressFields
+// (all-optional, for POST /checkout) and CheckoutAddress (a few fields
+// required, for the shipping-rate-calc call) since every field here is
+// always a populated string.
+function toAddressPayload(fields: AddressFields) {
+  return {
+    first_name: fields.firstName,
+    last_name: fields.lastName,
+    company: fields.company,
+    address_1: fields.address1,
+    address_2: fields.address2,
+    city: fields.city,
+    state: fields.state,
+    postcode: fields.postcode,
+    country: fields.country,
+  };
+}
+
+// Renders one address's field set. `prefix` sets both the id/name
+// (`shipping_address_1`, `billing_address_1`, ...) and the autocomplete
+// section token (`shipping address-line1`, `billing address-line1`) so
+// browser/password-manager autofill can tell the two forms apart when both
+// are visible at once - omit it for the single-address (no shipping needed)
+// case, where bare tokens are the spec-correct choice.
+function AddressFieldset({
+  prefix,
+  values,
+  onChange,
+  countries,
+}: {
+  prefix?: "shipping" | "billing";
+  values: AddressFields;
+  onChange: (field: keyof AddressFields, value: string) => void;
+  countries: CheckoutConfigResponse["countries"]["allowed_countries"] | null;
+}) {
+  const idPrefix = prefix ? `${prefix}_` : "";
+  const ac = prefix ? `${prefix} ` : "";
+
+  const bind = (field: keyof AddressFields) => ({
+    value: values[field],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(field, e.target.value),
+  });
+
+  return (
+    <>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}first_name`}>First Name *</Label>
+          <Input
+            id={`${idPrefix}first_name`}
+            name={`${idPrefix}first_name`}
+            autoComplete={`${ac}given-name`}
+            required
+            {...bind("firstName")}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}last_name`}>Last Name *</Label>
+          <Input
+            id={`${idPrefix}last_name`}
+            name={`${idPrefix}last_name`}
+            autoComplete={`${ac}family-name`}
+            required
+            {...bind("lastName")}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}company`}>Company (optional)</Label>
+        <Input
+          id={`${idPrefix}company`}
+          name={`${idPrefix}company`}
+          autoComplete={`${ac}organization`}
+          {...bind("company")}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}address_1`}>Street Address *</Label>
+        <Input
+          id={`${idPrefix}address_1`}
+          name={`${idPrefix}address_1`}
+          autoComplete={`${ac}address-line1`}
+          required
+          placeholder="House number and street name"
+          {...bind("address1")}
+        />
+        <Input
+          id={`${idPrefix}address_2`}
+          name={`${idPrefix}address_2`}
+          autoComplete={`${ac}address-line2`}
+          placeholder="Apartment, suite, unit, etc. (optional)"
+          {...bind("address2")}
+        />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}city`}>City *</Label>
+          <Input
+            id={`${idPrefix}city`}
+            name={`${idPrefix}city`}
+            autoComplete={`${ac}address-level2`}
+            required
+            {...bind("city")}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}state`}>State / Province *</Label>
+          <Input
+            id={`${idPrefix}state`}
+            name={`${idPrefix}state`}
+            autoComplete={`${ac}address-level1`}
+            required
+            {...bind("state")}
+          />
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}postcode`}>ZIP / Postal Code *</Label>
+          <Input
+            id={`${idPrefix}postcode`}
+            name={`${idPrefix}postcode`}
+            autoComplete={`${ac}postal-code`}
+            required
+            {...bind("postcode")}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}country`}>Country *</Label>
+          {countries ? (
+            <Select
+              value={values.country}
+              onValueChange={(value) => onChange("country", value)}
+            >
+              <SelectTrigger id={`${idPrefix}country`}>
+                <SelectValue placeholder="Select a country" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(countries).map(([code, name]) => (
+                  <SelectItem key={code} value={code}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id={`${idPrefix}country`}
+              name={`${idPrefix}country`}
+              autoComplete={`${ac}country`}
+              required
+              {...bind("country")}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
 }
 
 export default function CheckoutPage() {
@@ -84,18 +290,20 @@ export default function CheckoutPage() {
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     email: "",
-    firstName: "",
-    lastName: "",
-    company: "",
-    address1: "",
-    address2: "",
-    city: "",
-    state: "",
-    postcode: "",
-    country: "US",
     phone: "",
+    shipping: emptyAddress("US"),
+    billingIsDifferent: false,
+    billing: emptyAddress("US"),
     notes: "",
   });
+
+  const needsShipping = cart.needsShipping;
+  // The address that actually applies as billing: the separate billing form
+  // when the cart needs shipping and the customer said it differs, the
+  // single address form when the cart doesn't need shipping at all,
+  // otherwise a mirror of the shipping address.
+  const billingSource =
+    !needsShipping || formData.billingIsDifferent ? formData.billing : formData.shipping;
 
   // Fetch static checkout config (for the country select) once on mount -
   // it's public, store-level metadata that doesn't depend on the cart.
@@ -105,34 +313,47 @@ export default function CheckoutPage() {
       .catch((err) => console.error("Failed to load checkout config:", err));
   }, []);
 
-  // Prefill billing details from the logged-in customer's account so they
+  // Prefill address details from the logged-in customer's account so they
   // don't have to retype an address (and especially their email) they've
-  // already given us. Only fills fields the account actually has data for,
-  // preferring the saved billing address over the bare account name/email
-  // (a customer may not have a billing address saved yet, but their account
-  // email/name are always present) - never overwrites once typed, since
-  // this only runs when `isAuthenticated` changes (login/mount), not on
-  // every keystroke.
+  // already given us. Prefers the account's saved shipping address for the
+  // primary (shipping) form, falling back to billing/account name - and if
+  // the account has both a billing and a shipping address on file and they
+  // differ, pre-checks "billing is different" and prefills the billing form
+  // too. Never overwrites once typed, since this only runs when
+  // `isAuthenticated` changes (login/mount), not on every keystroke.
   useEffect(() => {
     if (!isAuthenticated) return;
 
     getMyAccount()
       .then((account) => {
         const billing = account.user.addresses.billing;
-        setFormData((prev) => ({
-          ...prev,
-          email: billing?.email || account.user.email || prev.email,
-          firstName: billing?.first_name || account.user.first_name || prev.firstName,
-          lastName: billing?.last_name || account.user.last_name || prev.lastName,
-          company: billing?.company || prev.company,
-          address1: billing?.address_1 || prev.address1,
-          address2: billing?.address_2 || prev.address2,
-          city: billing?.city || prev.city,
-          state: billing?.state || prev.state,
-          postcode: billing?.postcode || prev.postcode,
-          country: billing?.country || prev.country,
-          phone: billing?.phone || prev.phone,
-        }));
+        const shipping = account.user.addresses.shipping;
+
+        setFormData((prev) => {
+          const nextShipping = addressFromAccount(shipping ?? billing, {
+            ...prev.shipping,
+            firstName: prev.shipping.firstName || account.user.first_name,
+            lastName: prev.shipping.lastName || account.user.last_name,
+          });
+
+          const isDifferent = Boolean(
+            billing &&
+              shipping &&
+              (billing.address_1 !== shipping.address_1 ||
+                billing.city !== shipping.city ||
+                billing.postcode !== shipping.postcode ||
+                billing.country !== shipping.country)
+          );
+
+          return {
+            ...prev,
+            email: billing?.email || account.user.email || prev.email,
+            phone: billing?.phone || prev.phone,
+            shipping: nextShipping,
+            billingIsDifferent: isDifferent || prev.billingIsDifferent,
+            billing: isDifferent ? addressFromAccount(billing, prev.billing) : prev.billing,
+          };
+        });
       })
       .catch((err) =>
         console.error("Failed to load account details for checkout:", err)
@@ -156,29 +377,41 @@ export default function CheckoutPage() {
       });
   }, [cart.items.length]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFormData((prev) => ({ ...prev, notes: e.target.value }));
+  };
+
+  const handleShippingFieldChange = (field: keyof AddressFields, value: string) => {
+    setFormData((prev) => ({ ...prev, shipping: { ...prev.shipping, [field]: value } }));
+  };
+
+  const handleBillingFieldChange = (field: keyof AddressFields, value: string) => {
+    setFormData((prev) => ({ ...prev, billing: { ...prev.billing, [field]: value } }));
+  };
+
   // Push the address to CoCart's cart (via the update-customer callback)
-  // whenever the address fields settle, so shipping rates get calculated
-  // before the user reaches payment. Debounced to avoid a request per
-  // keystroke. Both saving the address and calculating/returning shipping
-  // rates work on CoCart Basic alone - only *selecting* a non-default rate
-  // (selectShippingMethod, below) requires CoCart Plus.
+  // whenever the shipping address fields settle, so shipping rates get
+  // calculated before the user reaches payment. Debounced to avoid a
+  // request per keystroke. Both saving the address and calculating/
+  // returning shipping rates work on CoCart Basic alone - only *selecting*
+  // a non-default rate (selectShippingMethod, below) requires CoCart Plus.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const hasEnoughAddress =
-      formData.address1.trim() &&
-      formData.city.trim() &&
-      formData.postcode.trim() &&
-      formData.country.trim();
+    if (!needsShipping || cart.items.length === 0) return;
 
-    if (!hasEnoughAddress || cart.items.length === 0) return;
+    const hasEnoughAddress =
+      formData.shipping.address1.trim() &&
+      formData.shipping.city.trim() &&
+      formData.shipping.postcode.trim() &&
+      formData.shipping.country.trim();
+
+    if (!hasEnoughAddress) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -187,21 +420,14 @@ export default function CheckoutPage() {
       setShippingError(null);
 
       const billing: CheckoutAddress = {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        company: formData.company,
-        address_1: formData.address1,
-        address_2: formData.address2,
-        city: formData.city,
-        state: formData.state,
-        postcode: formData.postcode,
-        country: formData.country,
+        ...toAddressPayload(billingSource),
         email: formData.email,
         phone: formData.phone,
       };
+      const shipping: CheckoutAddress = toAddressPayload(formData.shipping);
 
       try {
-        await updateCustomerAddress(billing);
+        await updateCustomerAddress(billing, shipping);
         setAddressSaved(true);
       } catch (err) {
         setShippingError(
@@ -216,19 +442,7 @@ export default function CheckoutPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    formData.address1,
-    formData.address2,
-    formData.city,
-    formData.state,
-    formData.postcode,
-    formData.country,
-    formData.company,
-    formData.firstName,
-    formData.lastName,
-    formData.email,
-    formData.phone,
-  ]);
+  }, [formData, needsShipping, cart.items.length]);
 
   const handleSelectShippingMethod = async (rateId: string, packageId: string) => {
     setShippingError(null);
@@ -245,24 +459,16 @@ export default function CheckoutPage() {
   };
 
   const submitCheckout = (paymentData: CheckoutPaymentDataEntry[]) => {
-    const address = {
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      company: formData.company,
-      address_1: formData.address1,
-      address_2: formData.address2,
-      city: formData.city,
-      state: formData.state,
-      postcode: formData.postcode,
-      country: formData.country,
+    const billingAddress = {
+      ...toAddressPayload(billingSource),
       email: formData.email,
       phone: formData.phone,
     };
 
     return processCheckout({
-      billing_address: address,
-      shipping_address: address,
-      use_different_billing: true,
+      billing_address: billingAddress,
+      shipping_address: needsShipping ? toAddressPayload(formData.shipping) : undefined,
+      use_different_billing: needsShipping ? formData.billingIsDifferent : false,
       payment_method: paymentMethod,
       payment_data: paymentData,
       customer_note: formData.notes,
@@ -433,43 +639,9 @@ export default function CheckoutPage() {
 
           <form onSubmit={handleSubmit}>
             <div className="grid lg:grid-cols-3 gap-8">
-              {/* Billing Details */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="border rounded-lg p-6 space-y-4">
-                  <h2 className="text-xl font-bold">Billing Details</h2>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name *</Label>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        required
-                        value={formData.firstName}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name *</Label>
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        required
-                        value={formData.lastName}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company (optional)</Label>
-                    <Input
-                      id="company"
-                      name="company"
-                      value={formData.company}
-                      onChange={handleInputChange}
-                    />
-                  </div>
+                  <h2 className="text-xl font-bold">Contact Information</h2>
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email *</Label>
@@ -477,9 +649,14 @@ export default function CheckoutPage() {
                       id="email"
                       name="email"
                       type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       required
                       value={formData.email}
-                      onChange={handleInputChange}
+                      onChange={handleContactChange}
                     />
                   </div>
 
@@ -489,96 +666,55 @@ export default function CheckoutPage() {
                       id="phone"
                       name="phone"
                       type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
                       required
                       value={formData.phone}
-                      onChange={handleInputChange}
+                      onChange={handleContactChange}
                     />
                   </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="address1">Street Address *</Label>
-                    <Input
-                      id="address1"
-                      name="address1"
-                      required
-                      placeholder="House number and street name"
-                      value={formData.address1}
-                      onChange={handleInputChange}
-                    />
-                    <Input
-                      id="address2"
-                      name="address2"
-                      placeholder="Apartment, suite, unit, etc. (optional)"
-                      value={formData.address2}
-                      onChange={handleInputChange}
+                {needsShipping && (
+                  <div className="border rounded-lg p-6 space-y-4">
+                    <h2 className="text-xl font-bold">Shipping Address</h2>
+                    <AddressFieldset
+                      prefix="shipping"
+                      values={formData.shipping}
+                      onChange={handleShippingFieldChange}
+                      countries={countries}
                     />
                   </div>
+                )}
 
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City *</Label>
-                      <Input
-                        id="city"
-                        name="city"
-                        required
-                        value={formData.city}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="state">State / Province *</Label>
-                      <Input
-                        id="state"
-                        name="state"
-                        required
-                        value={formData.state}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
+                <div className="border rounded-lg p-6 space-y-4">
+                  <h2 className="text-xl font-bold">Billing Address</h2>
 
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="postcode">ZIP / Postal Code *</Label>
-                      <Input
-                        id="postcode"
-                        name="postcode"
-                        required
-                        value={formData.postcode}
-                        onChange={handleInputChange}
+                  {needsShipping && (
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={formData.billingIsDifferent}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            billingIsDifferent: e.target.checked,
+                          }))
+                        }
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="country">Country *</Label>
-                      {countries ? (
-                        <Select
-                          value={formData.country}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({ ...prev, country: value }))
-                          }
-                        >
-                          <SelectTrigger id="country">
-                            <SelectValue placeholder="Select a country" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(countries).map(([code, name]) => (
-                              <SelectItem key={code} value={code}>
-                                {name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          id="country"
-                          name="country"
-                          required
-                          value={formData.country}
-                          onChange={handleInputChange}
-                        />
-                      )}
-                    </div>
-                  </div>
+                      Billing address is different from shipping address
+                    </label>
+                  )}
+
+                  {(!needsShipping || formData.billingIsDifferent) && (
+                    <AddressFieldset
+                      prefix={needsShipping ? "billing" : undefined}
+                      values={formData.billing}
+                      onChange={handleBillingFieldChange}
+                      countries={countries}
+                    />
+                  )}
                 </div>
 
                 <div className="border rounded-lg p-6 space-y-4">
@@ -639,7 +775,7 @@ export default function CheckoutPage() {
                     className="w-full px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Notes about your order, e.g. special notes for delivery"
                     value={formData.notes}
-                    onChange={handleInputChange}
+                    onChange={handleNotesChange}
                   />
                 </div>
               </div>
