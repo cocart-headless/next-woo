@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Next.js Revalidation
- * Plugin URI: https://github.com/9d8dev/next-wp
+ * Plugin URI: https://github.com/cocart-headless/next-woo
  * Description: Automatically revalidate Next.js cache when WordPress content changes
  * Version: 1.1.0
  * Author: 9d8

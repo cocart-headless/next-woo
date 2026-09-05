@@ -2,7 +2,7 @@
 
 A headless WooCommerce storefront built with Next.js 16, React 19, TypeScript, and the [CoCart](https://cocartapi.com) REST API.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2F9d8dev%2Fnext-woo&env=WORDPRESS_URL,WORDPRESS_HOSTNAME,WORDPRESS_WEBHOOK_SECRET,NEXT_PUBLIC_WORDPRESS_URL,WC_CONSUMER_KEY,WC_CONSUMER_SECRET&envDescription=WordPress%20URL%2C%20hostname%20for%20images%2C%20webhook%20secret%2C%20and%20WooCommerce%20API%20credentials&project-name=next-woo&repository-name=next-woo&demo-title=Next.js%20WooCommerce%20Starter&demo-url=https%3A%2F%2Fnext-woo.com)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcocart-headless%2Fnext-woo&env=WORDPRESS_URL,WORDPRESS_HOSTNAME,WORDPRESS_WEBHOOK_SECRET,NEXT_PUBLIC_WORDPRESS_URL,WC_CONSUMER_KEY,WC_CONSUMER_SECRET&envDescription=WordPress%20URL%2C%20hostname%20for%20images%2C%20webhook%20secret%2C%20and%20WooCommerce%20API%20credentials&project-name=next-woo&repository-name=next-woo&demo-title=Next.js%20WooCommerce%20Starter&demo-url=https%3A%2F%2Fnext-woo.com)
 
 <!-- Add your screenshot here -->
 <!-- ![Next Woo Screenshot](screenshot.png) -->
@@ -23,7 +23,8 @@ A headless WooCommerce storefront built with Next.js 16, React 19, TypeScript, a
 - **CoCart-Powered Cart & Auth** - Session persistence and cart operations via the [CoCart](https://cocartapi.com) SDK
 - **Type-safe API Layer** - Comprehensive TypeScript definitions for WooCommerce
 - **Client-side Cart** - Persistent shopping cart with localStorage
-- **WooCommerce Checkout** - Redirects to WooCommerce for secure payment processing
+- **Native Headless Checkout** - Order creation and payment via CoCart Plus, no redirect to WooCommerce
+- **Customer Accounts** - Login, registration, and an account dashboard (orders, downloads, profile) native to the app
 - **Server-side Pagination** - Efficient product browsing with filters
 - **Blog Support** - WordPress posts, categories, tags, and authors
 - **Cache Revalidation** - Automatic updates when content changes
@@ -34,22 +35,22 @@ A headless WooCommerce storefront built with Next.js 16, React 19, TypeScript, a
 
 | Feature | Implementation |
 |---------|---------------|
-| Product browsing | Next.js pages with WooCommerce API |
+| Product browsing | Next.js pages with CoCart-backed product/category data |
 | Product search & filters | Server-side with URL params |
-| Shopping cart | Client-side with localStorage |
-| Checkout form | Next.js form, order created via API |
-| Payment processing | **Redirects to WooCommerce** (Stripe, PayPal, etc.) |
-| Account management | **Redirects to WooCommerce** My Account |
+| Shopping cart | Client-side with localStorage, synced to CoCart session |
+| Checkout form | Native, on `/checkout` — no redirect to WooCommerce |
+| Payment processing | **Handled in-app** via CoCart Plus's checkout API (Stripe Elements, offline gateways, redirect-based gateways) |
+| Account management | **Native** login, registration, and account dashboard (orders, downloads, profile) |
 | Order confirmation | Next.js success page |
 | Blog | WordPress posts via REST API |
 
-### Why Redirect for Payment & Accounts?
+### Why Native Checkout & Accounts?
 
-Instead of building custom Stripe integration and authentication:
-- **Security** - WooCommerce handles PCI compliance
-- **Flexibility** - Store owner can change payment gateways without code changes
-- **Simplicity** - No auth infrastructure to maintain
-- **Battle-tested** - WooCommerce's checkout is proven at scale
+Instead of redirecting to WooCommerce's hosted checkout and My Account:
+- **Control** - Full ownership of the checkout and account UX, no jarring domain switch
+- **Flexibility** - Store owner can still change payment gateways in WooCommerce admin without code changes
+- **Still secure** - Card details go straight to the gateway (e.g. Stripe Elements); WooCommerce/CoCart Plus still creates and owns the order
+- **Battle-tested backend** - Order creation, payment, and account data still live in WooCommerce/CoCart, just surfaced natively
 
 ## Setup
 
@@ -88,10 +89,8 @@ WooCommerce creates these automatically, but verify they exist:
 
 - **Shop** (`/shop`) - Product listing
 - **Cart** (`/cart`) - Shopping cart
-- **Checkout** (`/checkout`) - Payment page
-- **My Account** (`/my-account`) - Customer login/dashboard
 
-Check in **WooCommerce → Settings → Advanced → Page Setup**.
+Check in **WooCommerce → Settings → Advanced → Page Setup**. Checkout and My Account are handled natively by this Next.js app (`/checkout`, `/account`, `/login`, `/register`) rather than WooCommerce's hosted pages.
 
 #### Add Products
 
@@ -113,7 +112,7 @@ Check in **WooCommerce → Settings → Advanced → Page Setup**.
 ### Step 4: Clone & Configure Next.js
 
 ```bash
-git clone https://github.com/9d8dev/next-woo.git
+git clone https://github.com/cocart-headless/next-woo.git
 cd next-woo
 pnpm install
 cp .env.example .env.local
@@ -133,32 +132,33 @@ WORDPRESS_WEBHOOK_SECRET="your-secret-key-here"
 # WooCommerce API credentials from Step 3
 WC_CONSUMER_KEY="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 WC_CONSUMER_SECRET="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Only needed if you enable the WooCommerce Stripe Gateway - mounts Stripe
+# Elements client-side for card payments (safe to expose)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_xxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 ### Step 5: Payment Gateway
 
-Configure your payment gateway in **WooCommerce → Settings → Payments**.
+Configure your payment gateway in **WooCommerce → Settings → Payments**. Checkout is handled by this Next.js app via CoCart Plus's checkout API — no redirect to WooCommerce.
 
 Popular options:
-- **Stripe** - Credit cards (install Stripe plugin)
-- **PayPal** - PayPal checkout
-- **Cash on Delivery** - For testing
+- **Stripe** (WooCommerce Stripe Gateway) - Card payments via Stripe Elements, mounted client-side; requires `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- **PayPal** or other redirect-based gateways - Customer is sent to `action_data.redirect` and returns to `/checkout/success`
+- **Cash on Delivery** - For testing, no client-side config needed
 
 #### Configure Return URL
 
-After payment, customers should return to your Next.js site:
+For the customer to land back on this Next.js site after payment:
 
-1. Most payment gateways handle this automatically using the order's redirect URL
-2. If needed, configure the thank you page URL in your gateway settings:
-   ```
-   https://your-nextjs-site.com/checkout/success
-   ```
+1. Set CoCart Starter's `frontend_url` setting in WP admin so `payment_result.redirect_url` points at this app instead of the WooCommerce domain
+2. Redirect-based gateways send the customer to `/checkout/success` automatically once payment completes
 
 ### Step 6: Revalidation Plugin (Optional)
 
 For automatic cache updates when products/posts change:
 
-1. Download [next-revalidate.zip](https://github.com/9d8dev/next-woo/tree/main/plugin)
+1. Download the plugin from [wordpress/next-revalidate](https://github.com/cocart-headless/next-woo/tree/main/wordpress/next-revalidate) in this repo
 2. Go to **Plugins → Add New → Upload Plugin**
 3. Upload and activate the plugin
 4. Go to **Settings → Next.js Revalidation**
@@ -227,31 +227,39 @@ handled without leaving the Next.js app:
 next-woo/
 ├── app/
 │   ├── api/
-│   │   ├── og/              # OG image generation
-│   │   └── revalidate/      # Cache revalidation webhook
-│   ├── shop/
-│   │   ├── [slug]/          # Product detail pages
-│   │   └── category/[slug]/ # Category pages
-│   ├── cart/                # Shopping cart page
+│   │   ├── og/                    # OG image generation
+│   │   └── revalidate/            # Cache revalidation webhook
+│   ├── shop/                      # Product listing
+│   ├── product/[slug]/            # Product detail pages
+│   ├── product-category/[slug]/   # Category pages
+│   ├── cart/                      # Shopping cart page
 │   ├── checkout/
-│   │   └── success/         # Order confirmation
-│   ├── posts/               # Blog posts
-│   └── pages/               # WordPress pages
+│   │   └── success/               # Order confirmation
+│   ├── account/
+│   │   ├── (dashboard)/           # Profile, orders, order detail, downloads
+│   │   └── verify-email/          # Email verification
+│   ├── login/                     # Customer login
+│   ├── register/                  # Customer registration
+│   ├── posts/                     # Blog posts
+│   └── pages/                     # WordPress pages
 ├── components/
-│   ├── shop/                # Shop components
-│   ├── posts/               # Blog components
-│   ├── ui/                  # shadcn/ui components
-│   └── theme/               # Theme toggle
+│   ├── shop/                      # Shop components
+│   ├── posts/                     # Blog components
+│   ├── ui/                        # shadcn/ui components
+│   └── theme/                     # Theme toggle
 ├── lib/
-│   ├── woocommerce.ts       # WooCommerce API functions (My Account only)
-│   ├── woocommerce.d.ts     # WooCommerce type definitions
-│   ├── cocart.ts            # CoCart SDK-backed product/category/cart functions
-│   ├── cocart-client.ts     # Shared CoCart SDK client singleton
-│   ├── cocart-checkout.ts   # CoCart Plus native checkout API client
-│   ├── wordpress.ts         # WordPress API functions
-│   └── wordpress.d.ts       # WordPress type definitions
-├── site.config.ts           # Site metadata
-└── menu.config.ts           # Navigation configuration
+│   ├── woocommerce.ts             # Orders, customers, coupons, shipping, payment gateways
+│   ├── woocommerce.d.ts           # WooCommerce type definitions
+│   ├── cocart.ts                  # CoCart SDK-backed product/category/cart functions
+│   ├── cocart-client.ts           # Shared CoCart SDK client singleton
+│   ├── cocart-checkout.ts         # CoCart Plus native checkout API client
+│   ├── cocart-account.ts          # CoCart Plus account/auth API client
+│   ├── cocart-register.ts         # Customer registration API client
+│   ├── stripe-client.ts           # Stripe Elements client-side helper
+│   ├── wordpress.ts               # WordPress API functions
+│   └── wordpress.d.ts             # WordPress type definitions
+├── site.config.ts                 # Site metadata
+└── menu.config.ts                 # Navigation configuration
 ```
 
 ## API Functions
@@ -259,7 +267,7 @@ next-woo/
 ### Products
 
 ```typescript
-import { getProducts, getProductBySlug } from "@/lib/woocommerce";
+import { getProducts, getProductBySlug } from "@/lib/cocart";
 
 // Get paginated products
 const { data: products, headers } = await getProducts(1, 12, {
@@ -275,7 +283,7 @@ const product = await getProductBySlug("product-name");
 ### Categories & Tags
 
 ```typescript
-import { getAllProductCategories, getProductCategoryBySlug } from "@/lib/woocommerce";
+import { getAllProductCategories, getProductCategoryBySlug } from "@/lib/cocart";
 
 const categories = await getAllProductCategories();
 const category = await getProductCategoryBySlug("clothing");
@@ -370,9 +378,10 @@ pnpm lint      # Run ESLint
   the WooCommerce domain
 - Check the selected payment gateway is enabled and configured in WooCommerce
 
-### My Account link not working
-- Ensure `NEXT_PUBLIC_WORDPRESS_URL` is set correctly
-- Verify WooCommerce My Account page exists at `/my-account`
+### Account / login not working
+- Verify CoCart Plus's account/auth endpoints respond (`lib/cocart-account.ts`)
+- Ensure `WC_CONSUMER_KEY`/`WC_CONSUMER_SECRET` are valid — order history on `/account/orders` uses the WooCommerce REST API
+- Ensure `NEXT_PUBLIC_WORDPRESS_URL` is set correctly — the client-side CoCart SDK (`lib/cocart-client.ts`) uses it as its base URL
 
 ## Tech Stack
 
@@ -389,6 +398,6 @@ MIT License
 
 ## Credits
 
-Built on [next-wp](https://github.com/9d8dev/next-wp) by [9d8](https://9d8.dev).
+Built on a forked [next-wp](https://github.com/9d8dev/next-wp) by [9d8](https://9d8.dev).
 
 Headless cart functionality powered by [CoCart](https://cocartapi.com/).
