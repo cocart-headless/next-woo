@@ -85,12 +85,14 @@ If you don't have a WordPress site yet:
 
 #### Required WooCommerce Pages
 
-WooCommerce creates these automatically, but verify they exist:
+This app never renders WooCommerce's own Shop/Cart templates — it has its own `/shop` and `/cart` routes. But WooCommerce still needs its internal **Shop** and **Cart** pages registered (`wc_get_page_id()`), since some core behavior (URL generation, redirects, certain REST/webhook logic) depends on them existing. WooCommerce creates these automatically on install; just verify they're still there:
 
-- **Shop** (`/shop`) - Product listing
-- **Cart** (`/cart`) - Shopping cart
+- **Shop** - Product listing (internal reference only; the storefront's product listing lives at this app's `/shop`)
+- **Cart** - Shopping cart (internal reference only; the storefront's cart lives at this app's `/cart`)
 
-Check in **WooCommerce → Settings → Advanced → Page Setup**. Checkout and My Account are handled natively by this Next.js app (`/checkout`, `/account`, `/login`, `/register`) rather than WooCommerce's hosted pages.
+Check in **WooCommerce → Settings → Advanced → Page Setup**.
+
+Checkout and My Account are different: this project replaces WooCommerce's hosted Checkout/My Account pages entirely with a native CoCart Plus-powered flow (`/checkout`, `/account`, `/login`, `/register`). There's no equivalent WooCommerce page to keep around for those — skip them in Page Setup.
 
 #### Add Products
 
