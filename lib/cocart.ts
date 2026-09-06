@@ -747,7 +747,7 @@ export function getProductStockMessage(product: Product | ProductVariation): str
  *
  * Every `used_for_variation` attribute declared on the *product* must be
  * present as a key here, even when this specific variation doesn't declare a
- * value for it - verified live against next-wp.instawp.xyz: omitting a key
+ * value for it - verified live against a WooCommerce instance: omitting a key
  * the variation doesn't declare (rather than sending it as "") makes
  * WooCommerce's variation matching fail server-side, which the CoCart
  * Starter plugin mishandles (calls the non-existent WP_Error::set_param() on

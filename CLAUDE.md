@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-Headless WordPress starter using Next.js 16 App Router with TypeScript.
+Headless WooCommerce storefront using Next.js 16 App Router with TypeScript, CoCart for cart/checkout/accounts, and the WordPress REST API for blog content.
 
 ### Data Layer (`lib/wordpress.ts`)
 - All WordPress REST API interactions centralized here
@@ -34,7 +34,7 @@ Headless WordPress starter using Next.js 16 App Router with TypeScript.
 - Shop: `/shop`, `/product/[slug]`, `/product-category/[slug]`
 - Cart/Checkout: `/cart`, `/checkout`, `/checkout/success`
 - Account: `/account`, `/account/orders`, `/account/orders/[id]`
-- API: `/api/revalidate` (webhook), `/api/og` (OG images), `/api/checkout` (order creation)
+- API: `/api/revalidate` (webhook), `/api/og` (OG images)
 
 ### Data Fetching Patterns
 - Server Components with parallel `Promise.all()` calls
@@ -92,14 +92,14 @@ Headless WordPress starter using Next.js 16 App Router with TypeScript.
 WORDPRESS_URL="https://example.com"           # Full WordPress URL
 WORDPRESS_HOSTNAME="example.com"              # For Next.js image optimization
 WORDPRESS_WEBHOOK_SECRET="secret-key"         # Webhook validation
-NEXT_PUBLIC_WORDPRESS_URL="https://example.com"  # Client-side WordPress URL (for My Account links)
+NEXT_PUBLIC_WORDPRESS_URL="https://example.com"  # Base URL for the client-side CoCart SDK client
 
 # WooCommerce (required for shop functionality)
 WC_CONSUMER_KEY="ck_xxx"                      # WooCommerce REST API consumer key
 WC_CONSUMER_SECRET="cs_xxx"                   # WooCommerce REST API consumer secret
 ```
 
-Note: Payment processing is configured in WooCommerce admin, not in Next.js.
+Note: Payment gateways are configured in WooCommerce admin; the checkout flow itself (order creation, payment attempt) runs natively via CoCart Plus, not a WooCommerce-hosted page.
 
 ## Key Dependencies
 - Next.js 16 with React 19

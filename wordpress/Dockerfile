@@ -1,7 +1,7 @@
 FROM wordpress:latest
 
 # Labels for GitHub Container Registry
-LABEL org.opencontainers.image.source="https://github.com/9d8dev/next-woo"
+LABEL org.opencontainers.image.source="https://github.com/cocart-headless/next-woo"
 LABEL org.opencontainers.image.description="WordPress with WooCommerce for headless Next.js"
 LABEL org.opencontainers.image.licenses="MIT"
 
